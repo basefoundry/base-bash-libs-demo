@@ -1,0 +1,15 @@
+schema_version: 1
+
+project:
+  name: base-bash-libs-demo
+
+test:
+  command: ./tests/validate.sh
+
+release:
+  version_file: VERSION
+  changelog: CHANGELOG.md
+  tag_prefix: v
+  github:
+    repository: basefoundry/base-bash-libs-demo
+    release_title: "{repository} v{version}"
