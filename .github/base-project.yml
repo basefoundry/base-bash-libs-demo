@@ -2,8 +2,9 @@ project:
   areas: []
   initiatives: []
   issue_defaults:
+    assignee: codeforester
     status: Backlog
     priority: P2
     area: Product
-    initiative: Adoption Polish
+    initiative: Base Bash Demo
     size: S

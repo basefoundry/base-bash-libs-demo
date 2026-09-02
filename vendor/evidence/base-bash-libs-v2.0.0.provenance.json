@@ -1,0 +1,13 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [{"name": "base-bash-libs-v2.0.0.tar.gz", "digest": {"sha256": "73d6f92fab8f1a8ded7f3b4312ebbe51aa8ec0c16eacf18c2d8fa23fb5664333"}}],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://github.com/basefoundry/base-bash-libs/release-artifact/v1",
+      "externalParameters": {"version": "2.0.0", "sourceCommit": "b4243765726c133499feeabdc50154f99c0fec12", "dirtyState": "clean"},
+      "resolvedDependencies": [{"uri": "git+https://github.com/basefoundry/base-bash-libs.git", "digest": {"sha1": "b4243765726c133499feeabdc50154f99c0fec12"}}]
+    },
+    "runDetails": {"builder": {"id": "base-bash-libs/release-artifact"}, "metadata": {"reproducible": true}}
+  }
+}

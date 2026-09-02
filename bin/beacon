@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+beacon_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)" || exit 1
+beacon_launcher="$beacon_root/vendor/base-bash-libs/bin/base-bash"
+
+[[ -x "$beacon_launcher" ]] || {
+    printf 'ERROR: verified Base Bash launcher is missing at %s\n' "$beacon_launcher" >&2
+    exit 1
+}
+
+exec "$beacon_launcher" "$beacon_root/lib/beacon.sh" "$@"

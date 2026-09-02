@@ -10,3 +10,6 @@ and versions are tracked in the repo-root `VERSION` file.
 ### Added
 
 - Initialized the repository with the Base-managed repo baseline.
+- Added the Beacon offline support-bundle reference consumer.
+- Vendored and independently verified the canonical Base Bash v2.0.0 release.
+- Added Ubuntu, minimum Bash 4.2.53, and macOS Homebrew Bash validation.

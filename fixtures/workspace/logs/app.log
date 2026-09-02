@@ -1,0 +1,3 @@
+2026-09-02T08:00:00Z level=INFO service=beacon-demo message="startup complete"
+2026-09-02T08:00:01Z level=DEBUG token=demo-token-123 message="fixture credential must be redacted"
+2026-09-02T08:00:02Z level=WARN password=demo-password-456 message="fixture password must be redacted"

@@ -1,0 +1,220 @@
+schema_version: 1
+manifest_kind: base-bash-libs-api
+manifest_version: 2.0.0
+minimum_bash: "4.2"
+generated_reference: docs/api-reference.md
+migration_inventory: docs/v2-api-contract.md
+
+namespace:
+  public_function_prefix: base_
+  global_prefix: BASE_BASH_LIBS_
+  internal_function_prefix: __base_bash_libs_
+  lifecycle_functions: base_init,base_require_version
+
+# These fields are intentionally flat and line-oriented.  Consumers can inspect
+# the manifest with ordinary shell tools without installing a YAML runtime.
+environment:
+  - BASE_BASH_LIBS_VERSION|readonly-global|loaded package version
+  - BASE_BASH_LIBS_COMMIT|readonly-global|full source commit or embedded release commit
+  - BASE_BASH_LIBS_DIRTY_STATE|readonly-global|clean, dirty, or unknown checkout state
+  - BASE_BASH_LIBS_PROVENANCE|readonly-global|checkout, release-artifact, source-archive, copy, or unknown
+  - BASE_BASH_LIBS_DRY_RUN|caller-control|dry-run policy requested by the caller
+  - BASE_BASH_LIBS_PRIMARY_LOG|caller-control|primary persistent log sink
+  - BASE_CLI_PRIMARY_LOG|caller-input|Base shared primary log sink
+  - BASE_BASH_LIBS_LOG_DEBUG|caller-control|enable debug diagnostics
+  - BASE_BASH_LIBS_LOG_UTC|caller-control|render log timestamps in UTC
+  - BASE_BASH_LIBS_GIT_PULL_MAX_ATTEMPTS|caller-control|maximum git pull attempts
+  - NO_COLOR|caller-input|disable color output when set
+  - TMPDIR|caller-input|temporary directory policy
+  - GH_TOKEN|caller-input|GitHub CLI authentication input
+  - TZ|caller-input|caller-selected timezone for diagnostics
+
+optional_commands: git,gh,timeout,gtimeout
+
+artifacts:
+  - base_api_manifest.yaml|source|canonical API and module manifest
+  - lib/bash/base-bash-libs.release|runtime-metadata|embedded release identity for copied and installed artifacts
+  - docs/api-reference.md|generated|scripts/api-manifest generate|checked-in
+  - docs/api-manifest-schema.md|documentation|API manifest schema and tooling
+  - docs/pinned-consumption.md|documentation|immutable pin and artifact verification procedure
+  - docs/v2-api-contract.md|documentation|normative API behavior charter
+  - docs/single-file-distribution.md|documentation|single-file and deterministic bundle workflow
+  - docs/vendor-workflow.md|documentation|offline vendor and standalone workflow
+  - docs/v2-symbol-map.md|documentation|v2 migration and symbol map
+  - lib/bash/README.md|documentation|package layout and namespace contract
+  - lib/bash/tests/test_helper.sh|test-support|shared BATS helpers
+
+# Every module remains one sourceable file (or the standalone launcher).  The
+# module-level contract applies to each symbol listed in public_symbols; the
+# module README carries the call-specific signature and examples.
+modules:
+  - name: std
+    kind: sourceable-library
+    source: lib/bash/std/lib_std.sh
+    documentation: lib/bash/std/README.md
+    tests: lib/bash/std/tests/lib_std.bats
+    dependencies: none
+    optional_commands: awk,basename,cat,command,cp,date,grep,mktemp,mv,printf,rm,sed,tput
+    artifacts: lib/bash/std/lib_std.sh,lib/bash/std/README.md,lib/bash/std/tests/lib_std.bats
+    public_symbols: base_init,base_require_version,base_std_add_to_path,base_std_ask_yes_no,base_std_assert_arg_count,base_std_assert_associative_array,base_std_assert_command_exists,base_std_assert_dir_exists,base_std_assert_executable,base_std_assert_file_exists,base_std_assert_function_exists,base_std_assert_indexed_array,base_std_assert_integer,base_std_assert_integer_range,base_std_assert_not_null,base_std_assert_variable_name,base_std_check_bash_version,base_std_command_path,base_std_dedupe_path,base_std_dump_trace,base_std_exit_if_error,base_std_fatal_error,base_std_function_exists,base_std_get_my_source_dir,base_std_import,base_std_is_dry_run,base_std_is_interactive,base_std_log_debug,base_std_log_debug_enter,base_std_log_debug_file,base_std_log_debug_leave,base_std_log_error,base_std_log_fatal,base_std_log_info,base_std_log_info_enter,base_std_log_info_file,base_std_log_info_leave,base_std_log_is_enabled,base_std_log_verbose,base_std_log_verbose_enter,base_std_log_verbose_file,base_std_log_verbose_leave,base_std_log_warn,base_std_make_temp_dir,base_std_make_temp_file,base_std_print_bold,base_std_print_error,base_std_print_info,base_std_print_message,base_std_print_path,base_std_print_success,base_std_print_tty,base_std_print_warn,base_std_register_cleanup_hook,base_std_register_cleanup_path,base_std_run,base_std_run_or_exit,base_std_safe_cd,base_std_safe_mkdir,base_std_safe_touch,base_std_safe_truncate,base_std_safe_unalias,base_std_set_log_category_level,base_std_set_log_level,base_std_unregister_cleanup_hook,base_std_unregister_cleanup_path,base_std_wait_for_enter
+    signature_source: lib/bash/std/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; named outputs are caller-owned
+    statuses: documented per symbol; recoverable failures return status
+    side_effects: documented per symbol; sourcing is passive
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: file
+    kind: sourceable-library
+    source: lib/bash/file/lib_file.sh
+    documentation: lib/bash/file/README.md
+    tests: lib/bash/file/tests/lib_file.bats
+    dependencies: std
+    optional_commands: awk,cmp,cp,mv,rm,stat
+    artifacts: lib/bash/file/lib_file.sh,lib/bash/file/README.md,lib/bash/file/tests/lib_file.bats
+    public_symbols: base_file_section_exists,base_file_section_needs_update,base_file_update_file_section
+    signature_source: lib/bash/file/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; named outputs are caller-owned
+    statuses: documented per symbol; recoverable failures return status
+    side_effects: documented per symbol; sourcing is passive
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: git
+    kind: sourceable-library
+    source: lib/bash/git/lib_git.sh
+    documentation: lib/bash/git/README.md
+    tests: lib/bash/git/tests/lib_git.bats
+    dependencies: std
+    optional_commands: git,awk,grep,mktemp,rm,sleep
+    artifacts: lib/bash/git/lib_git.sh,lib/bash/git/README.md,lib/bash/git/tests/lib_git.bats
+    public_symbols: base_git_branch_merged_to_ref,base_git_branch_upstream,base_git_check_script_up_to_date,base_git_detect_default_branch,base_git_get_current_branch,base_git_list_remote_branches,base_git_list_worktree_branches,base_git_update_repo,base_git_worktree_path_for_branch
+    signature_source: lib/bash/git/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; named outputs are caller-owned
+    statuses: usage and contract errors return 2; recoverable failures and false predicates return 1 unless a symbol documents a specific status; freshness checks use 3 for dirty, 4 for behind, and 5 for diverged
+    side_effects: documented per symbol; sourcing is passive
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: gh
+    kind: sourceable-library
+    source: lib/bash/gh/lib_gh.sh
+    documentation: lib/bash/gh/README.md
+    tests: lib/bash/gh/tests/lib_gh.bats
+    dependencies: std
+    optional_commands: gh,awk,grep,mktemp,rm,sleep,timeout,gtimeout
+    artifacts: lib/bash/gh/lib_gh.sh,lib/bash/gh/README.md,lib/bash/gh/tests/lib_gh.bats
+    public_symbols: base_gh_api_with_retry,base_gh_auth_status_diagnostics,base_gh_infer_repo_from_origin,base_gh_repo_default_branch,base_gh_repo_from_remote_url,base_gh_report_command_failure,base_gh_require_cli,base_gh_run
+    signature_source: lib/bash/gh/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; named outputs are caller-owned
+    statuses: usage and contract errors return 2; recoverable failures return 1 unless a symbol preserves an underlying gh status
+    side_effects: documented per symbol; sourcing is passive
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: str
+    kind: sourceable-library
+    source: lib/bash/str/lib_str.sh
+    documentation: lib/bash/str/README.md
+    tests: lib/bash/str/tests/lib_str.bats
+    dependencies: std
+    optional_commands: none
+    artifacts: lib/bash/str/lib_str.sh,lib/bash/str/README.md,lib/bash/str/tests/lib_str.bats
+    public_symbols: base_str_contains,base_str_ends_with,base_str_join,base_str_lower,base_str_ltrim,base_str_rtrim,base_str_split,base_str_starts_with,base_str_trim,base_str_upper
+    signature_source: lib/bash/str/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; named outputs are caller-owned
+    statuses: documented per symbol; recoverable failures return status
+    side_effects: documented per symbol; sourcing is passive
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: arg
+    kind: sourceable-library
+    source: lib/bash/arg/lib_arg.sh
+    documentation: lib/bash/arg/README.md
+    tests: lib/bash/arg/tests/lib_arg.bats
+    dependencies: std
+    optional_commands: awk,grep
+    artifacts: lib/bash/arg/lib_arg.sh,lib/bash/arg/README.md,lib/bash/arg/tests/lib_arg.bats
+    public_symbols: base_arg_parse
+    signature_source: lib/bash/arg/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; named outputs are caller-owned
+    statuses: documented per symbol; recoverable failures return status
+    side_effects: documented per symbol; sourcing is passive
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: list
+    kind: sourceable-library
+    source: lib/bash/list/lib_list.sh
+    documentation: lib/bash/list/README.md
+    tests: lib/bash/list/tests/lib_list.bats
+    dependencies: std
+    optional_commands: none
+    artifacts: lib/bash/list/lib_list.sh,lib/bash/list/README.md,lib/bash/list/tests/lib_list.bats
+    public_symbols: base_list_append,base_list_contains,base_list_length,base_list_prepend,base_list_remove,base_list_unique
+    signature_source: lib/bash/list/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; named outputs are caller-owned
+    statuses: documented per symbol; recoverable failures return status
+    side_effects: documented per symbol; sourcing is passive
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: cli
+    kind: sourceable-library
+    source: lib/bash/cli/lib_cli.sh
+    documentation: lib/bash/cli/README.md
+    tests: lib/bash/cli/tests/lib_cli.bats
+    dependencies: std
+    optional_commands: none
+    artifacts: lib/bash/cli/lib_cli.sh,lib/bash/cli/README.md,lib/bash/cli/tests/lib_cli.bats
+    public_symbols: base_cli_command,base_cli_complete,base_cli_completion_script,base_cli_declare,base_cli_help,base_cli_model_init,base_cli_option,base_cli_parse,base_cli_positional,base_cli_result_count,base_cli_result_get,base_cli_result_get_positional,base_cli_run,base_cli_validate_model
+    signature_source: lib/bash/cli/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; parsed results use BASE_BASH_LIBS_CLI_RESULT_* globals and named result variables
+    statuses: documented per symbol; usage and validation errors return status 2
+    side_effects: documented per symbol; sourcing is passive and completion/help are non-mutating
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: app
+    kind: sourceable-library
+    source: lib/bash/app/lib_app.sh
+    documentation: lib/bash/app/README.md
+    tests: lib/bash/app/tests/lib_app.bats
+    dependencies: std,cli
+    optional_commands: none
+    artifacts: lib/bash/app/lib_app.sh,lib/bash/app/README.md,lib/bash/app/tests/lib_app.bats
+    public_symbols: base_app_add_standard_options,base_app_apply_standard_options,base_app_config_define,base_app_config_get,base_app_config_load,base_app_config_provenance,base_app_config_report,base_app_config_set_cli,base_app_hook,base_app_init,base_app_prompt,base_app_run,base_app_should_prompt,base_app_status
+    signature_source: lib/bash/app/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; reports are redacted by the secret attribute
+    statuses: recoverable failures return status; malformed configuration returns 2
+    side_effects: configuration state and lifecycle hooks are explicit; sourcing is passive
+    stability: stable
+    since: 2.0.0
+    deprecated: false
+  - name: launcher
+    kind: executable-launcher
+    source: bin/base-bash
+    documentation: docs/v2-api-contract.md
+    tests: tests/launcher.bats
+    dependencies: std
+    optional_commands: awk,basename,cat,cp,date,dirname,grep,mktemp,mv,readlink,rm,sed,bash,git,gh,timeout,gtimeout
+    artifacts: bin/base-bash,docs/v2-api-contract.md,tests/launcher.bats
+    public_symbols: base_launcher_check_project,base_launcher_die,base_launcher_ensure_supported_bash,base_launcher_import_base_bash_lib,base_launcher_init,base_launcher_lib_dir_is_usable,base_launcher_package_root,base_launcher_resolve_lib_dir,base_launcher_resolve_path,base_launcher_run_script,base_launcher_source_stdlib,base_launcher_usage
+    signature_source: docs/v2-api-contract.md
+    inputs: --help, --version, check, or [--] <script> [args...]; BASE_BASH_LIBS_DIR may select a package path
+    outputs: help/version/check records and delegated script output; application stdout remains application-owned
+    statuses: help/version 0; check 0 or 1; usage errors 2; delegated application status is preserved
+    side_effects: sources the stdlib and starts the delegated script; check is non-mutating
+    stability: stable
+    since: 2.0.0
+    deprecated: false

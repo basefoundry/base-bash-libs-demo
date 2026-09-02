@@ -12,10 +12,56 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    runs-on: macos-latest
+  ubuntu:
+    name: Ubuntu validation
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: Validate repository baseline
+        with:
+          persist-credentials: false
+      - name: Install validation tools
+        run: sudo apt-get update && sudo apt-get install -y bats shellcheck
+      - name: Validate consumer
         run: ./tests/validate.sh
+
+  bash-42:
+    name: Minimum runtime (Bash 4.2.53)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Run networkless minimum-runtime smoke
+        run: |
+          docker run --rm \
+            --platform linux/amd64 \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges=true \
+            --pids-limit 64 \
+            --user 65534:65534 \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777 \
+            --env HOME=/tmp \
+            --env TMPDIR=/tmp \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly" \
+            --workdir /workspace \
+            docker.io/library/bash@sha256:0931edd3941d0603cb3d5da1cb298cf3eb6a579e09e094c3e34e2d5e9df8cddc \
+            bash tests/bash-42-smoke.sh
+
+  macos:
+    name: macOS Homebrew Bash validation
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Install supported Bash and validation tools
+        run: brew install bash bats-core shellcheck
+      - name: Validate consumer
+        run: |
+          export PATH="$(brew --prefix)/bin:$PATH"
+          ./tests/validate.sh
