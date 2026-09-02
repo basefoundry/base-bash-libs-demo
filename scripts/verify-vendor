@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+verify_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)" || exit 1
+verify_vendor="$verify_root/vendor/base-bash-libs"
+verify_lock="$verify_root/base-bash-libs.lock"
+
+verify_fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+[[ -f "$verify_lock" ]] || verify_fail "missing base-bash-libs.lock"
+[[ -f "$verify_vendor/MANIFEST.sha256" ]] || verify_fail "missing vendor manifest"
+[[ -f "$verify_vendor/BUNDLE.release" ]] || verify_fail "missing bundle identity"
+
+verify_version="$(sed -n 's/^version=//p' "$verify_lock")"
+verify_commit="$(sed -n 's/^commit=//p' "$verify_lock")"
+verify_asset_digest="$(sed -n 's/^asset_sha256=//p' "$verify_lock")"
+verify_manifest_digest="$(sed -n 's/^manifest_sha256=//p' "$verify_lock")"
+[[ -n "$verify_version" && -n "$verify_commit" && -n "$verify_asset_digest" && -n "$verify_manifest_digest" ]] || \
+    verify_fail "lock file is incomplete"
+
+if command -v sha256sum >/dev/null 2>&1; then
+    verify_actual_manifest="$(sha256sum "$verify_vendor/MANIFEST.sha256")"
+    verify_actual_manifest="${verify_actual_manifest%% *}"
+    (cd "$verify_vendor" && sha256sum -c MANIFEST.sha256 >/dev/null) || \
+        verify_fail "vendor manifest verification failed"
+elif command -v shasum >/dev/null 2>&1; then
+    verify_actual_manifest="$(shasum -a 256 "$verify_vendor/MANIFEST.sha256")"
+    verify_actual_manifest="${verify_actual_manifest%% *}"
+    (cd "$verify_vendor" && shasum -a 256 -c MANIFEST.sha256 >/dev/null) || \
+        verify_fail "vendor manifest verification failed"
+else
+    verify_fail "sha256sum or shasum is required"
+fi
+
+[[ "$verify_actual_manifest" == "$verify_manifest_digest" ]] || \
+    verify_fail "vendor manifest digest does not match the lock"
+grep -Fqx "$verify_asset_digest  base-bash-libs-v$verify_version.tar.gz" \
+    "$verify_root/vendor/evidence/base-bash-libs-v$verify_version.SHA256SUMS" || \
+    verify_fail "release asset digest does not match the lock"
+
+if command -v sha256sum >/dev/null 2>&1; then
+    while read -r verify_digest verify_name; do
+        case "$verify_name" in
+            *.provenance.json|*.spdx.json)
+                verify_evidence_digest="$(sha256sum "$verify_root/vendor/evidence/$verify_name")"
+                verify_evidence_digest="${verify_evidence_digest%% *}"
+                [[ "$verify_evidence_digest" == "$verify_digest" ]] || \
+                    verify_fail "release evidence digest failed for $verify_name"
+                ;;
+        esac
+    done < "$verify_root/vendor/evidence/base-bash-libs-v$verify_version.SHA256SUMS"
+else
+    while read -r verify_digest verify_name; do
+        case "$verify_name" in
+            *.provenance.json|*.spdx.json)
+                verify_evidence_digest="$(shasum -a 256 "$verify_root/vendor/evidence/$verify_name")"
+                verify_evidence_digest="${verify_evidence_digest%% *}"
+                [[ "$verify_evidence_digest" == "$verify_digest" ]] || \
+                    verify_fail "release evidence digest failed for $verify_name"
+                ;;
+        esac
+    done < "$verify_root/vendor/evidence/base-bash-libs-v$verify_version.SHA256SUMS"
+fi
+
+grep -Fqx "source_version=$verify_version" "$verify_vendor/BUNDLE.release" || \
+    verify_fail "bundle version does not match the lock"
+grep -Fqx "source_commit=$verify_commit" "$verify_vendor/BUNDLE.release" || \
+    verify_fail "bundle commit does not match the lock"
+grep -Fqx "version=$verify_version" "$verify_vendor/lib/bash/base-bash-libs.release" || \
+    verify_fail "runtime version does not match the lock"
+grep -Fqx "commit=$verify_commit" "$verify_vendor/lib/bash/base-bash-libs.release" || \
+    verify_fail "runtime commit does not match the lock"
+grep -Fq "\"sourceCommit\": \"$verify_commit\"" \
+    "$verify_root/vendor/evidence/base-bash-libs-v$verify_version.provenance.json" || \
+    verify_fail "provenance source commit does not match the lock"
+
+printf 'Verified base-bash-libs %s at %s.\n' "$verify_version" "$verify_commit"

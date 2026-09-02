@@ -1,0 +1,960 @@
+#!/usr/bin/env bash
+
+#
+# base-bash
+#     Standalone launcher for Bash scripts that use base-bash-libs.
+#
+# Responsibilities:
+#     - run a Bash script with lib/bash/std/lib_std.sh preloaded
+#     - explicitly initialize stdlib runtime state and filter wrapper flags
+#     - provide package-relative imports without establishing Base runtime state
+#
+
+base_launcher_die() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+__base_bash_libs_launcher_usage_error__() {
+    printf 'ERROR: %s\n' "$*" >&2
+    base_launcher_usage >&2
+    return 2
+}
+
+base_launcher_resolve_path() {
+    local source_path="${1:-}"
+    local link_dir
+    local target
+    local link_depth=0
+
+    [[ -n "$source_path" ]] || return 1
+
+    if [[ "$source_path" != */* ]]; then
+        if [[ -e "$source_path" ]]; then
+            source_path="./$source_path"
+        else
+            source_path="$(command -v -- "$source_path" 2> /dev/null || true)"
+            [[ -n "$source_path" ]] || return 1
+        fi
+    fi
+
+    while [[ -L "$source_path" ]]; do
+        link_depth=$((link_depth + 1))
+        if ((link_depth > 40)); then
+            printf 'ERROR: Symlink resolution exceeded 40 links for %s.\n' "$source_path" >&2
+            return 1
+        fi
+        link_dir="$(cd -- "$(dirname -- "$source_path")" && pwd -P)" || return 1
+        target="$(readlink "$source_path")" || return 1
+        if [[ "$target" == /* ]]; then
+            source_path="$target"
+        else
+            source_path="$link_dir/$target"
+        fi
+    done
+
+    link_dir="$(cd -- "$(dirname -- "$source_path")" && pwd -P)" || return 1
+    printf '%s/%s\n' "$link_dir" "$(basename -- "$source_path")"
+}
+
+base_launcher_package_root() {
+    local source_path
+    local bin_dir
+
+    source_path="$(base_launcher_resolve_path "$0")" || return 1
+    bin_dir="$(cd -- "$(dirname -- "$source_path")" && pwd -P)" || return 1
+    cd -- "$bin_dir/.." && pwd -P
+}
+
+base_launcher_ensure_supported_bash() {
+    local candidate
+    local candidates=()
+    local display_version
+
+    __base_bash_libs_launcher_bash_is_supported__ && return 0
+
+    if [[ -n "${BASE_BASH_LIBS_TEST_BASH_CANDIDATES:-}" ]]; then
+        IFS=: read -r -a candidates <<< "$BASE_BASH_LIBS_TEST_BASH_CANDIDATES"
+    else
+        candidates=(/opt/homebrew/bin/bash /usr/local/bin/bash)
+    fi
+
+    for candidate in "${candidates[@]}"; do
+        [[ -x "$candidate" ]] || continue
+        [[ "$candidate" == "${BASH:-}" ]] && continue
+        # Re-exec under a supported Bash; the current process should not continue.
+        # shellcheck disable=SC2093
+        exec "$candidate" "$0" "$@"
+    done
+
+    display_version="$(__base_bash_libs_launcher_bash_display_version__)"
+
+    {
+        printf 'ERROR: base-bash requires Bash 4.2 or newer; current version is %s.\n' "$display_version"
+        printf 'A supported Bash was not found at /opt/homebrew/bin/bash or /usr/local/bin/bash.\n'
+    } >&2
+    exit 1
+}
+
+__base_bash_libs_launcher_bash_parts__() {
+    local raw="${BASE_BASH_LIBS_TEST_BASH_VERSION:-${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}}"
+    local major minor
+
+    if [[ "$raw" == *.* ]]; then
+        major="${raw%%.*}"
+        minor="${raw#*.}"
+    else
+        major="${raw:0:1}"
+        minor="${raw:1}"
+    fi
+    [[ "$major" =~ ^[0-9]+$ ]] || major=0
+    [[ "$minor" =~ ^[0-9]+$ ]] || minor=0
+    printf '%s\t%s\n' "$major" "$minor"
+}
+
+__base_bash_libs_launcher_bash_is_supported__() {
+    local major minor
+
+    IFS=$'\t' read -r major minor < <(__base_bash_libs_launcher_bash_parts__)
+    ((10#$major > 4 || (10#$major == 4 && 10#$minor >= 2)))
+}
+
+__base_bash_libs_launcher_bash_display_version__() {
+    local major minor
+
+    IFS=$'\t' read -r major minor < <(__base_bash_libs_launcher_bash_parts__)
+    printf '%s.%s\n' "$major" "$minor"
+}
+
+base_launcher_lib_dir_is_usable() {
+    local candidate="${1:-}"
+
+    [[ -n "$candidate" ]] || return 1
+    [[ -f "$candidate/std/lib_std.sh" ]]
+}
+
+base_launcher_resolve_lib_dir() {
+    local package_root="$1"
+    local explicit_dir="${BASE_BASH_LIBS_DIR:-}"
+    local candidate
+
+    if [[ -n "$explicit_dir" ]]; then
+        base_launcher_lib_dir_is_usable "$explicit_dir" || {
+            base_launcher_die "BASE_BASH_LIBS_DIR '$explicit_dir' does not contain std/lib_std.sh."
+        }
+        cd -L -- "$explicit_dir" && pwd -L
+        return $?
+    fi
+
+    for candidate in "$package_root/lib/bash" "$package_root/libexec/lib/bash"; do
+        if base_launcher_lib_dir_is_usable "$candidate"; then
+            cd -L -- "$candidate" && pwd -L
+            return $?
+        fi
+    done
+
+    base_launcher_die "Unable to find base-bash-libs under '$package_root'. Set BASE_BASH_LIBS_DIR to a compatible lib/bash directory."
+}
+
+base_launcher_source_stdlib() {
+    local stdlib_path="$BASE_BASH_LIBS_DIR/std/lib_std.sh"
+    # shellcheck source=/dev/null
+    source "$stdlib_path"
+}
+
+base_launcher_import_base_bash_lib() {
+    # Keep the launcher-facing name as a thin process-boundary adapter. The
+    # stdlib owns the one canonical package-relative loader and all validation.
+    [[ -n "${BASE_BASH_LIBS_STDLIB_LOADED:-}" ]] ||
+        base_std_fatal_error "base_launcher_import_base_bash_lib: stdlib is not loaded."
+    base_std_import "$@" || base_std_fatal_error "base_launcher_import_base_bash_lib: package-relative import failed."
+}
+
+base_launcher_run_script() {
+    local script_path="$1"
+    local package_root="$2"
+    local -a runtime_args=()
+    shift 2
+
+    [[ -f "$script_path" ]] || {
+        __base_bash_libs_launcher_usage_error__ "Script '$script_path' was not found."
+        return $?
+    }
+
+    BASE_BASH_LIBS_DIR="$(base_launcher_resolve_lib_dir "$package_root")" || exit $?
+    export BASE_BASH_LIBS_DIR
+
+    base_launcher_source_stdlib || exit $?
+    base_init runtime_args --source "$script_path" -- "$@" || exit $?
+
+    unset -f main
+
+    # shellcheck source=/dev/null
+    source "$script_path" "${runtime_args[@]}" || exit $?
+
+    if ! declare -F main > /dev/null 2>&1; then
+        base_std_fatal_error "Script '$script_path' did not define main()."
+    fi
+
+    main "${runtime_args[@]}"
+}
+
+__base_bash_libs_launcher_init_write_readme__() {
+    cat << 'EOF'
+# Base Bash application
+
+This project was generated by `base-bash init` with the v2 professional
+application contract. It is offline-friendly: the framework source is
+selected by `BASE_BASH_LIBS_DIR` and the immutable release pin in
+`BASE_BASH_LIBS_PIN`.
+
+## Quick start
+
+```bash
+BASE_BASH_LIBS_DIR=/path/to/base-bash-libs/lib/bash ./bin/app --help
+BASE_BASH_LIBS_DIR=/path/to/base-bash-libs/lib/bash ./bin/app status
+BASE_BASH_LIBS_DIR=/path/to/base-bash-libs/lib/bash ./bin/app run --dry-run
+```
+
+The generated executable demonstrates declarative help/version handling,
+subcommands, typed configuration, safe diagnostics, dry-run behavior, and
+exactly-once cleanup hooks. It never evaluates configuration files as shell.
+
+Run the local checks with `./tests/run.sh` (standard profile) or inspect the
+single-file application module in `lib/app.sh`.
+EOF
+}
+
+__base_bash_libs_launcher_init_write_pin__() {
+    printf '%s\n' "version=2.0.0" "source_commit=${__base_bash_libs_launcher_init_pin_commit:-unknown}" "artifact=base-bash-libs" "verification=pin-and-verify-before-update"
+}
+
+__base_bash_libs_launcher_init_write_version__() { printf '0.1.0\n'; }
+
+__base_bash_libs_launcher_init_write_gitignore__() {
+    cat << 'EOF'
+.DS_Store
+*.log
+.venv/
+EOF
+}
+
+__base_bash_libs_launcher_init_write_editorconfig__() {
+    cat << 'EOF'
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+
+[*.sh]
+shell_variant = bash
+EOF
+}
+
+__base_bash_libs_launcher_init_write_shellcheckrc__() {
+    cat << 'EOF'
+shell=bash
+severity=warning
+external-sources=true
+EOF
+}
+
+__base_bash_libs_launcher_init_write_app__() {
+    cat << 'EOF'
+#!/usr/bin/env base-bash
+# shellcheck shell=bash
+
+app_project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# shellcheck source=/dev/null
+source "$app_project_root/lib/app.sh"
+EOF
+}
+
+__base_bash_libs_launcher_init_write_app_module__() {
+    cat << 'EOF'
+# shellcheck shell=bash
+# This generated application module is intentionally one physical file.
+
+base_launcher_import_base_bash_lib cli/lib_cli.sh app/lib_app.sh
+
+base_cli_model_init demo name=demo version=2.0.0 description="Professional Bash application" handler=demo_dispatch
+base_cli_command demo status "Show application status" handler=demo_dispatch
+base_cli_command demo run "Run the application" handler=demo_dispatch
+base_cli_command demo fail "Exercise failure handling" handler=demo_dispatch
+base_app_init demo_policy name=demo
+base_app_config_define demo_policy name string default=world env=DEMO_NAME
+base_app_add_standard_options demo ""
+
+demo_cleanup_hook() {
+    base_std_log_debug -l generated.demo "cleanup complete (status=$2)"
+}
+
+demo_execute() {
+    local command="${BASE_BASH_LIBS_CLI_RESULT_COMMAND:-}" name config_file user_config
+    local -a config_args=()
+
+    base_app_apply_standard_options demo_policy
+    if base_cli_result_get config config_file 2>/dev/null; then
+        config_args+=(--project "$config_file")
+    fi
+    if base_cli_result_get user_config user_config 2>/dev/null; then
+        config_args+=(--user "$user_config")
+    fi
+    base_app_config_load demo_policy "${config_args[@]}" || return $?
+    base_app_hook demo_policy cleanup generated_cleanup demo_cleanup_hook || return $?
+
+    case "$command" in
+    status)
+        base_std_log_info -l generated.demo "framework=${BASE_BASH_LIBS_VERSION:-unknown}"
+        printf 'status=ready\n'
+        ;;
+    run)
+        base_app_config_get demo_policy name name || return $?
+        if ((BASE_BASH_LIBS_APP_DRY_RUN)); then
+            printf 'dry-run=would-greet:%s\n' "$name" >&2
+        else
+            base_std_log_info -l generated.demo "running application"
+            printf 'hello=%s\n' "$name"
+        fi
+        ;;
+    fail)
+        base_std_log_error -l generated.demo 'intentional failure example'
+        return 1
+        ;;
+    *)
+        base_std_log_error -l generated.demo "unknown command '$command'"
+        return 2
+        ;;
+    esac
+}
+
+demo_dispatch() { base_app_run demo_policy demo_execute; }
+main() { base_cli_run demo -- "$@"; }
+EOF
+}
+
+__base_bash_libs_launcher_init_write_config_example__() {
+    cat << 'EOF'
+# Optional project configuration. Values are data, never shell code.
+name=world
+EOF
+}
+
+__base_bash_libs_launcher_init_write_test__() {
+    cat << 'EOF'
+#!/usr/bin/env bats
+
+setup() {
+    project_root="$(cd -- "$BATS_TEST_DIRNAME/.." && pwd -P)"
+    export BASE_BASH_LIBS_DIR="${BASE_BASH_LIBS_DIR:-$project_root/vendor/base-bash-libs/lib/bash}"
+}
+
+@test "generated application exposes help and version" {
+    run "$project_root/bin/app" --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Usage: demo"* ]]
+    run "$project_root/bin/app" --version
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"2.0.0"* ]]
+}
+
+@test "generated application runs a subcommand and dry-run" {
+    run "$project_root/bin/app" run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"hello=world"* ]]
+    run "$project_root/bin/app" run --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"dry-run=would-greet:world"* ]]
+}
+
+@test "generated failure keeps a nonzero status" {
+    run "$project_root/bin/app" fail
+    [ "$status" -eq 1 ]
+}
+EOF
+}
+
+__base_bash_libs_launcher_init_write_tests_run__() {
+    cat << 'EOF'
+#!/usr/bin/env bash
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+if ! command -v bats >/dev/null 2>&1; then
+    printf 'ERROR: bats is required\n' >&2
+    exit 1
+fi
+bats "$repo_root/tests/app.bats" || exit $?
+EOF
+}
+
+__base_bash_libs_launcher_init_write_ci__() {
+    cat << 'EOF'
+name: validate
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mfinelli/setup-bats@v1
+      - run: shellcheck --severity=warning bin/app lib/app.sh tests/app.bats
+      - run: ./tests/run.sh
+EOF
+}
+
+__base_bash_libs_launcher_init_write_shfmt__() {
+    cat << 'EOF'
+#!/usr/bin/env bash
+if ! command -v shfmt >/dev/null 2>&1; then
+    printf 'ERROR: shfmt is required\n' >&2
+    exit 1
+fi
+shfmt -d bin/app lib/app.sh tests/app.bats || exit $?
+EOF
+}
+
+__base_bash_libs_launcher_init_write_makefile__() {
+    cat << 'EOF'
+.PHONY: test lint fmt
+
+test:
+	./tests/run.sh
+
+lint:
+	shellcheck --severity=warning bin/app lib/app.sh tests/app.bats
+
+fmt:
+	shfmt -w bin/app lib/app.sh tests/app.bats
+EOF
+}
+
+__base_bash_libs_launcher_init_emit__() {
+    local output_path="$1" template="$2" mode="${3:-0644}" temporary
+
+    temporary="$(mktemp "${output_path}.base-bash-init.XXXXXX")" || {
+        printf 'ERROR: unable to create a private staging file for %s\n' "$output_path" >&2
+        return 1
+    }
+    "$template" > "$temporary" || {
+        rm -f -- "$temporary"
+        return 1
+    }
+    if [[ -e "$output_path" || -L "$output_path" ]]; then
+        if [[ -L "$output_path" ]] || ! cmp -s -- "$temporary" "$output_path"; then
+            rm -f -- "$temporary"
+            printf 'ERROR: refusing to overwrite existing file %s\n' "$output_path" >&2
+            return 2
+        fi
+        rm -f -- "$temporary"
+        return 0
+    fi
+    mv -- "$temporary" "$output_path" || return 1
+    chmod "$mode" "$output_path" || return 1
+}
+
+base_launcher_init() {
+    local target_dir="." profile=minimal argument package_root pin_commit
+    local -a files=()
+
+    while (($#)); do
+        argument="$1"
+        shift
+        case "$argument" in
+        --dir)
+            (($# > 0)) || {
+                printf 'ERROR: --dir requires a directory\n' >&2
+                return 2
+            }
+            target_dir="$1"
+            shift
+            ;;
+        --profile)
+            (($# > 0)) || {
+                printf 'ERROR: --profile requires minimal or standard\n' >&2
+                return 2
+            }
+            profile="$1"
+            shift
+            ;;
+        minimal | standard) profile="$argument" ;;
+        --help | -h)
+            printf '%s\n' 'Usage: base-bash init [--dir DIRECTORY] [--profile minimal|standard]'
+            return 0
+            ;;
+        *)
+            printf 'ERROR: unknown init option %s\n' "$argument" >&2
+            return 2
+            ;;
+        esac
+    done
+    case "$profile" in minimal | standard) ;; *)
+        printf 'ERROR: unsupported profile %s\n' "$profile" >&2
+        return 2
+        ;;
+    esac
+    target_dir="$(cd -- "$target_dir" 2> /dev/null && pwd -P || true)"
+    [[ -n "$target_dir" ]] || {
+        printf 'ERROR: target directory does not exist; create it before initialization\n' >&2
+        return 1
+    }
+    [[ -d "$target_dir" ]] || {
+        printf 'ERROR: target is not a directory: %s\n' "$target_dir" >&2
+        return 1
+    }
+
+    files=(README.md VERSION BASE_BASH_LIBS_PIN .gitignore .editorconfig .shellcheckrc bin/app lib/app.sh config/app.conf.example tests/app.bats)
+    if [[ "$profile" == standard ]]; then
+        files+=(tests/run.sh Makefile .github/workflows/validate.yml tools/shfmt-check.sh)
+    fi
+    package_root="$(base_launcher_package_root)" || return 1
+    pin_commit="unknown"
+    if [[ -r "$package_root/lib/bash/base-bash-libs.release" ]]; then
+        pin_commit="$(__base_bash_libs_launcher_metadata_value__ "$package_root/lib/bash/base-bash-libs.release" commit 2> /dev/null || printf '%s' unknown)"
+    fi
+    __base_bash_libs_launcher_init_pin_commit="$pin_commit"
+    for argument in "${files[@]}"; do
+        mkdir -p "$target_dir/$(dirname -- "$argument")" || return 1
+        case "$argument" in
+        README.md) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_readme__ || return $? ;;
+        VERSION) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_version__ || return $? ;;
+        BASE_BASH_LIBS_PIN) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_pin__ || return $? ;;
+        .gitignore) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_gitignore__ || return $? ;;
+        .editorconfig) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_editorconfig__ || return $? ;;
+        .shellcheckrc) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_shellcheckrc__ || return $? ;;
+        bin/app) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_app__ 0755 || return $? ;;
+        lib/app.sh) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_app_module__ || return $? ;;
+        config/app.conf.example) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_config_example__ || return $? ;;
+        tests/app.bats) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_test__ 0755 || return $? ;;
+        tests/run.sh) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_tests_run__ 0755 || return $? ;;
+        Makefile) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_makefile__ || return $? ;;
+        .github/workflows/validate.yml) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_ci__ || return $? ;;
+        tools/shfmt-check.sh) __base_bash_libs_launcher_init_emit__ "$target_dir/$argument" __base_bash_libs_launcher_init_write_shfmt__ 0755 || return $? ;;
+        esac
+    done
+    printf 'Initialized %s profile in %s\n' "$profile" "$target_dir"
+}
+
+base_launcher_usage() {
+    cat << 'EOF'
+Usage:
+  base-bash [--help|--version]
+  base-bash check
+  base-bash [--] <script> [args...]
+
+Commands:
+  --help       Show this help and exit successfully.
+  --version    Show launcher and loaded package provenance.
+  check        Diagnose Bash support, package health, imports, and tools.
+  init         Generate a deterministic minimal or standard project scaffold.
+
+Run a Bash script with base-bash-libs preloaded. Arguments after the script
+are passed unchanged; use -- before a script whose path begins with a dash.
+EOF
+}
+
+__base_bash_libs_launcher_check_usage__() {
+    cat << 'EOF'
+Usage:
+  base-bash check [--project DIRECTORY] [--format human|json]
+
+Diagnose the launcher, loaded package identity, module imports, Bash support,
+and required or optional external tools without running an application.
+With --project, also run non-mutating consumer conformance checks. JSON format
+emits one stable record per check for CI and editor integrations.
+EOF
+}
+
+__base_bash_libs_launcher_metadata_value__() {
+    local metadata_file="$1"
+    local metadata_key="$2"
+
+    [[ -r "$metadata_file" ]] || return 1
+    sed -n "s/^${metadata_key}=//p" "$metadata_file" | sed -n '1p'
+}
+
+__base_bash_libs_launcher_metadata_root__() {
+    local lib_dir="$1"
+
+    cd -- "$lib_dir/../.." && pwd -P
+}
+
+__base_bash_libs_launcher_print_version__() {
+    local lib_dir="$1"
+    local metadata_root metadata_file version commit dirty_state provenance
+
+    metadata_root="$(__base_bash_libs_launcher_metadata_root__ "$lib_dir")" || return 1
+    metadata_file="$lib_dir/base-bash-libs.release"
+    version=""
+    if [[ -r "$metadata_root/VERSION" ]]; then
+        IFS= read -r version < "$metadata_root/VERSION" || true
+    fi
+    version="${version:-$(__base_bash_libs_launcher_metadata_value__ "$metadata_file" version 2> /dev/null || true)}"
+    [[ -n "$version" ]] || {
+        printf 'ERROR: Unable to determine the base-bash-libs package version.\n' >&2
+        return 1
+    }
+
+    commit="$(__base_bash_libs_launcher_metadata_value__ "$metadata_file" commit 2> /dev/null || printf '%s' unknown)"
+    dirty_state="$(__base_bash_libs_launcher_metadata_value__ "$metadata_file" dirty_state 2> /dev/null || printf '%s' unknown)"
+    provenance="$(__base_bash_libs_launcher_metadata_value__ "$metadata_file" provenance 2> /dev/null || printf '%s' unknown)"
+
+    if __base_bash_libs_launcher_bash_is_supported__; then
+        BASE_BASH_LIBS_DIR="$lib_dir"
+        export BASE_BASH_LIBS_DIR
+        if base_launcher_source_stdlib 2> /dev/null; then
+            commit="$BASE_BASH_LIBS_COMMIT"
+            dirty_state="$BASE_BASH_LIBS_DIRTY_STATE"
+            provenance="$BASE_BASH_LIBS_PROVENANCE"
+        fi
+    fi
+
+    printf 'base-bash %s\n' "$version"
+    printf 'commit: %s\n' "$commit"
+    printf 'dirty-state: %s\n' "$dirty_state"
+    printf 'provenance: %s\n' "$provenance"
+}
+
+__base_bash_libs_launcher_check_tool__() {
+    local tool="$1"
+    local required="$2"
+    local resolved_path
+
+    if resolved_path="$(command -v -- "$tool" 2> /dev/null)"; then
+        printf 'OK tool/%s: %s\n' "$tool" "$resolved_path"
+        return 0
+    fi
+    if [[ "$required" == 1 ]]; then
+        printf 'ERROR tool/%s: not found; install or expose it on PATH.\n' "$tool"
+        return 1
+    fi
+    printf 'WARN tool/%s: not found; related optional helpers may be unavailable.\n' "$tool"
+}
+
+__base_bash_libs_launcher_check_lib_dir__() {
+    local package_root="$1"
+    local explicit_dir="${BASE_BASH_LIBS_DIR:-}"
+    local candidate
+
+    if [[ -n "$explicit_dir" ]]; then
+        if base_launcher_lib_dir_is_usable "$explicit_dir"; then
+            printf '%s\n' "$(cd -L -- "$explicit_dir" && pwd -L)"
+            return 0
+        fi
+        printf 'ERROR package: BASE_BASH_LIBS_DIR %s does not contain std/lib_std.sh.\n' "$explicit_dir" >&2
+        return 1
+    fi
+
+    for candidate in "$package_root/lib/bash" "$package_root/libexec/lib/bash"; do
+        if base_launcher_lib_dir_is_usable "$candidate"; then
+            printf '%s\n' "$(cd -L -- "$candidate" && pwd -L)"
+            return 0
+        fi
+    done
+    printf 'ERROR package: no usable lib/bash directory was found under %s.\n' "$package_root" >&2
+    return 1
+}
+
+__base_bash_libs_launcher_check__() {
+    local package_root="$1"
+    local launcher_path
+    local lib_dir
+    local check_status=0
+    local import_status
+    local module
+    local -a required_tools=(bash awk basename cat cp date dirname grep mktemp mv readlink rm sed)
+    local -a optional_tools=(git gh timeout gtimeout)
+    local -a modules=(file/lib_file.sh git/lib_git.sh gh/lib_gh.sh str/lib_str.sh arg/lib_arg.sh list/lib_list.sh cli/lib_cli.sh app/lib_app.sh)
+
+    if ! __base_bash_libs_launcher_bash_is_supported__; then
+        printf 'ERROR bash: Bash %s is unsupported; Bash 4.2 or newer is required.\n' \
+            "$(__base_bash_libs_launcher_bash_display_version__)"
+        check_status=1
+    else
+        printf 'OK bash: Bash %s is supported.\n' "$BASH_VERSION"
+    fi
+
+    launcher_path="$(base_launcher_resolve_path "$0" 2> /dev/null || true)"
+    if [[ -x "$launcher_path" ]]; then
+        printf 'OK installation: launcher=%s\n' "$launcher_path"
+    else
+        printf 'ERROR installation: launcher path could not be resolved or is not executable.\n'
+        check_status=1
+    fi
+
+    lib_dir="$(__base_bash_libs_launcher_check_lib_dir__ "$package_root")" || {
+        check_status=1
+        lib_dir=""
+    }
+
+    for module in "${required_tools[@]}"; do
+        __base_bash_libs_launcher_check_tool__ "$module" 1 || check_status=1
+    done
+    for module in "${optional_tools[@]}"; do
+        __base_bash_libs_launcher_check_tool__ "$module" 0 || check_status=1
+    done
+
+    [[ -n "$lib_dir" ]] || return "$check_status"
+    if ! __base_bash_libs_launcher_bash_is_supported__; then
+        printf 'SKIP package: cannot source the v2 package under an unsupported Bash.\n'
+        return "$check_status"
+    fi
+
+    BASE_BASH_LIBS_DIR="$lib_dir"
+    export BASE_BASH_LIBS_DIR
+    if ! base_launcher_source_stdlib 2> /dev/null; then
+        printf 'ERROR package: stdlib could not be sourced from %s.\n' "$lib_dir"
+        return 1
+    fi
+    if [[ -n "${BASE_BASH_LIBS_VERSION:-}" &&
+        -n "${BASE_BASH_LIBS_COMMIT:-}" &&
+        -n "${BASE_BASH_LIBS_DIRTY_STATE:-}" &&
+        -n "${BASE_BASH_LIBS_PROVENANCE:-}" ]]; then
+        printf 'OK package: base-bash-libs %s (commit=%s dirty-state=%s provenance=%s)\n' \
+            "$BASE_BASH_LIBS_VERSION" "$BASE_BASH_LIBS_COMMIT" \
+            "$BASE_BASH_LIBS_DIRTY_STATE" "$BASE_BASH_LIBS_PROVENANCE"
+    else
+        printf 'ERROR package: loaded package identity is incomplete.\n'
+        check_status=1
+    fi
+
+    if base_std_import "${modules[@]}" 2> /dev/null; then
+        printf 'OK imports: std plus %s companion modules loaded.\n' "${#modules[@]}"
+    else
+        import_status=$?
+        printf 'ERROR imports: companion module validation failed (status %s).\n' "$import_status"
+        check_status=1
+    fi
+    return "$check_status"
+}
+
+__base_bash_libs_launcher_project_record__() {
+    local format="$1" status="$2" check="$3" detail="$4"
+    if [[ "$format" == json ]]; then
+        detail="${detail//\\/\\\\}"
+        detail="${detail//\"/\\\"}"
+        printf '{"status":"%s","check":"%s","detail":"%s"}\n' "$status" "$check" "$detail"
+    else
+        printf '%s project/%s: %s\n' "${status^^}" "$check" "$detail"
+    fi
+}
+
+base_launcher_check_project() {
+    local project_dir="${1:-}" format="${2:-human}" path file version pin_version
+    local check_status=0 shellcheck_path shfmt_path bats_path mode
+    local -a required_files=(README.md VERSION BASE_BASH_LIBS_PIN bin/app lib/app.sh tests/app.bats)
+    local -a source_files=()
+
+    [[ -n "$project_dir" && -d "$project_dir" ]] || {
+        __base_bash_libs_launcher_project_record__ "$format" ERROR root "project directory does not exist: $project_dir"
+        return 1
+    }
+    project_dir="$(cd -- "$project_dir" && pwd -P)"
+    case "$BASE_BASH_LIBS_DIR" in
+    */libexec/lib/bash) mode=homebrew-installed ;;
+    */vendor/* | */third_party/*) mode=vendored ;;
+    *) mode=source-or-standalone ;;
+    esac
+    __base_bash_libs_launcher_project_record__ "$format" OK mode "$mode"
+
+    for path in "${required_files[@]}"; do
+        if [[ -f "$project_dir/$path" ]]; then
+            __base_bash_libs_launcher_project_record__ "$format" OK "file:$path" present
+        else
+            __base_bash_libs_launcher_project_record__ "$format" ERROR "file:$path" "missing; create it or rerun base-bash init"
+            check_status=1
+        fi
+    done
+    if [[ -x "$project_dir/bin/app" ]]; then
+        __base_bash_libs_launcher_project_record__ "$format" OK executable "bin/app is executable"
+    else
+        __base_bash_libs_launcher_project_record__ "$format" ERROR executable "bin/app is not executable"
+        check_status=1
+    fi
+
+    if [[ -r "$project_dir/VERSION" ]]; then
+        IFS= read -r version < "$project_dir/VERSION" || true
+        if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            __base_bash_libs_launcher_project_record__ "$format" OK version "$version"
+        else
+            __base_bash_libs_launcher_project_record__ "$format" ERROR version "invalid VERSION '$version'"
+            check_status=1
+        fi
+    fi
+    if [[ -r "$project_dir/BASE_BASH_LIBS_PIN" ]]; then
+        pin_version="$(sed -n 's/^version=//p' "$project_dir/BASE_BASH_LIBS_PIN" | sed -n '1p')"
+        if [[ "$pin_version" == 2.* ]]; then
+            __base_bash_libs_launcher_project_record__ "$format" OK framework-pin "$pin_version"
+        else
+            __base_bash_libs_launcher_project_record__ "$format" ERROR framework-pin "requires a v2 pin, found '$pin_version'"
+            check_status=1
+        fi
+    fi
+
+    while IFS= read -r -d '' file; do source_files+=("$file"); done < <(find "$project_dir" -type f -name '*.sh' -print0 2> /dev/null)
+    for file in "${source_files[@]+${source_files[@]}}"; do
+        if "${BASH:-bash}" -n "$file" 2> /dev/null; then
+            __base_bash_libs_launcher_project_record__ "$format" OK "syntax:${file#"$project_dir/"}" valid
+        else
+            __base_bash_libs_launcher_project_record__ "$format" ERROR "syntax:${file#"$project_dir/"}" "bash -n failed"
+            check_status=1
+        fi
+    done
+
+    if grep -REnq '(^|[^[:alnum:]_])(std_run|log_info|log_error|str_trim|list_append|arg_parse|git_update_repo|gh_run)[^[:alnum:]_]' \
+        "$project_dir/bin" "$project_dir/lib" "$project_dir/tests" 2> /dev/null; then
+        __base_bash_libs_launcher_project_record__ "$format" ERROR namespace "v1 API symbol detected; migrate to the base_ namespace"
+        check_status=1
+    else
+        __base_bash_libs_launcher_project_record__ "$format" OK namespace "no legacy v1 API symbols detected"
+    fi
+
+    if shellcheck_path="$(command -v shellcheck 2> /dev/null)"; then
+        if "$shellcheck_path" --severity=warning "${source_files[@]}" "$project_dir/tests/app.bats" > /dev/null 2>&1; then
+            __base_bash_libs_launcher_project_record__ "$format" OK shellcheck "warnings clean"
+        else
+            __base_bash_libs_launcher_project_record__ "$format" ERROR shellcheck "warnings or errors found"
+            check_status=1
+        fi
+    else
+        __base_bash_libs_launcher_project_record__ "$format" WARN shellcheck "not installed; install ShellCheck to enable lint validation"
+    fi
+    if shfmt_path="$(command -v shfmt 2> /dev/null)"; then
+        if "$shfmt_path" -d "${source_files[@]}" "$project_dir/tests/app.bats" > /dev/null 2>&1; then
+            __base_bash_libs_launcher_project_record__ "$format" OK format "shfmt clean"
+        else
+            __base_bash_libs_launcher_project_record__ "$format" ERROR format "shfmt reported formatting differences"
+            check_status=1
+        fi
+    else
+        __base_bash_libs_launcher_project_record__ "$format" WARN format "not installed; install shfmt to enable format validation"
+    fi
+    if bats_path="$(command -v bats 2> /dev/null)"; then
+        if PATH="$(dirname -- "$0"):$PATH" BASE_BASH_LIBS_DIR="$BASE_BASH_LIBS_DIR" "$bats_path" "$project_dir/tests/app.bats" > /dev/null 2>&1; then
+            __base_bash_libs_launcher_project_record__ "$format" OK tests "BATS suite passed"
+        else
+            __base_bash_libs_launcher_project_record__ "$format" ERROR tests "BATS suite failed"
+            check_status=1
+        fi
+    else
+        __base_bash_libs_launcher_project_record__ "$format" WARN tests "BATS is not installed; run the generated suite before release"
+    fi
+    return "$check_status"
+}
+
+main() {
+    local package_root
+    local script_path
+
+    case "${1:-}" in
+    -h | --help | help)
+        if (($# != 1)); then
+            __base_bash_libs_launcher_usage_error__ "--help does not accept application arguments."
+            return $?
+        fi
+        base_launcher_usage
+        return 0
+        ;;
+    -V | --version)
+        if (($# != 1)); then
+            __base_bash_libs_launcher_usage_error__ "--version does not accept application arguments."
+            return $?
+        fi
+        package_root="$(base_launcher_package_root)" || base_launcher_die "Unable to resolve base-bash-libs package root."
+        BASE_BASH_LIBS_DIR="$(base_launcher_resolve_lib_dir "$package_root")" || return $?
+        __base_bash_libs_launcher_print_version__ "$BASE_BASH_LIBS_DIR"
+        return $?
+        ;;
+    check)
+        shift
+        local project_dir="" check_format=human check_argument
+        while (($#)); do
+            check_argument="$1"
+            shift
+            case "$check_argument" in
+            --project)
+                (($# > 0)) || {
+                    __base_bash_libs_launcher_check_usage__ >&2
+                    return 2
+                }
+                project_dir="$1"
+                shift
+                ;;
+            --format)
+                (($# > 0)) || {
+                    __base_bash_libs_launcher_check_usage__ >&2
+                    return 2
+                }
+                check_format="$1"
+                shift
+                ;;
+            *)
+                __base_bash_libs_launcher_check_usage__ >&2
+                return 2
+                ;;
+            esac
+        done
+        [[ "$check_format" == human || "$check_format" == json ]] || {
+            printf 'ERROR: check format must be human or json.\n' >&2
+            return 2
+        }
+        package_root="$(base_launcher_package_root)" || base_launcher_die "Unable to resolve base-bash-libs package root."
+        if [[ -n "$project_dir" ]]; then
+            if [[ -z "${BASE_BASH_LIBS_DIR:-}" ]]; then
+                BASE_BASH_LIBS_DIR="$(__base_bash_libs_launcher_check_lib_dir__ "$package_root")" || return 1
+                export BASE_BASH_LIBS_DIR
+            fi
+            if [[ "$check_format" == json ]]; then
+                base_launcher_check_project "$project_dir" json
+                return $?
+            fi
+            __base_bash_libs_launcher_check__ "$package_root"
+            local package_status=$?
+            base_launcher_check_project "$project_dir" human
+            local project_status=$?
+            ((package_status == 0 && project_status == 0))
+            return $?
+        fi
+        __base_bash_libs_launcher_check__ "$package_root"
+        return $?
+        ;;
+    init)
+        shift
+        base_launcher_ensure_supported_bash "$@"
+        base_launcher_init "$@"
+        return $?
+        ;;
+    "")
+        __base_bash_libs_launcher_usage_error__ "A script path is required."
+        return $?
+        ;;
+    --)
+        shift
+        (($# > 0)) || {
+            __base_bash_libs_launcher_usage_error__ "A script path is required after --."
+            return $?
+        }
+        ;;
+    -*)
+        __base_bash_libs_launcher_usage_error__ "Unknown launcher option '$1'."
+        return $?
+        ;;
+    esac
+
+    base_launcher_ensure_supported_bash "$@"
+    package_root="$(base_launcher_package_root)" || base_launcher_die "Unable to resolve base-bash-libs package root."
+
+    script_path="$(base_launcher_resolve_path "$1")" || {
+        __base_bash_libs_launcher_usage_error__ "Script '$1' was not found."
+        return $?
+    }
+    shift
+
+    base_launcher_run_script "$script_path" "$package_root" "$@"
+}
+
+main "$@"

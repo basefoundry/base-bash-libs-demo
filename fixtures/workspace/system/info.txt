@@ -1,0 +1,3 @@
+os=fixture-linux
+architecture=fixture-amd64
+shell=bash-4.2+
