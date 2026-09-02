@@ -89,6 +89,19 @@ Install BATS and ShellCheck, then run the full gate:
 CI runs the full suite on Ubuntu and macOS with Homebrew Bash, plus a
 network-disabled smoke test on the exact minimum Bash 4.2.53 runtime.
 
+## Framework compatibility
+
+The scheduled and manually dispatched `Framework Compatibility` workflow tests
+an explicit Base Bash release tag or full commit without changing Beacon's
+committed default package. The same black-box contract is available locally:
+
+```bash
+./tests/candidate-smoke.sh /path/to/base-bash-libs-candidate
+```
+
+See [framework compatibility and pin updates](docs/framework-updates.md) for
+the immutable-input rules, reviewed pin-update procedure, and rollback path.
+
 ## Repository shape
 
 - `bin/beacon` selects the committed Base Bash launcher.
