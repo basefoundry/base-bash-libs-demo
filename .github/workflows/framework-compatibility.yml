@@ -1,0 +1,72 @@
+name: Framework Compatibility
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      framework_ref:
+        description: Immutable release tag or full base-bash-libs commit
+        required: true
+        default: v2.0.0
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.framework_ref || 'v2.0.0' }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    name: Candidate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-14
+    steps:
+      - name: Reject moving references
+        env:
+          FRAMEWORK_REF: ${{ inputs.framework_ref || 'v2.0.0' }}
+        run: |
+          case "$FRAMEWORK_REF" in
+            main|master|HEAD|refs/heads/*)
+              printf 'Moving framework ref is not allowed: %s\n' "$FRAMEWORK_REF" >&2
+              exit 1
+              ;;
+          esac
+          if [[ "$FRAMEWORK_REF" != v[0-9]* && ! "$FRAMEWORK_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            printf 'Expected a release tag or full commit: %s\n' "$FRAMEWORK_REF" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: basefoundry/base-bash-libs
+          ref: ${{ inputs.framework_ref || 'v2.0.0' }}
+          path: .framework-candidate
+          persist-credentials: false
+      - name: Install supported Bash on macOS
+        if: runner.os == 'macOS'
+        run: brew install bash
+      - name: Exercise the candidate through Beacon
+        env:
+          EXPECTED_REF: ${{ inputs.framework_ref || 'v2.0.0' }}
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            export PATH="$(brew --prefix)/bin:$PATH"
+          fi
+          candidate_commit="$(git -C .framework-candidate rev-parse --verify 'HEAD^{commit}')"
+          if [[ "$EXPECTED_REF" =~ ^[0-9a-f]{40}$ && "$candidate_commit" != "$EXPECTED_REF" ]]; then
+            printf 'Resolved commit %s does not match requested commit %s.\n' \
+              "$candidate_commit" "$EXPECTED_REF" >&2
+            exit 1
+          fi
+          ./tests/candidate-smoke.sh "$PWD/.framework-candidate" "" "$candidate_commit"

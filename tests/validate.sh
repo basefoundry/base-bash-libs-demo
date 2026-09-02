@@ -18,6 +18,9 @@ required_files=(
   scripts/verify-vendor
   tests/beacon.bats
   tests/bash-42-smoke.sh
+  tests/candidate-smoke.sh
+  docs/framework-updates.md
+  .github/workflows/framework-compatibility.yml
   vendor/base-bash-libs/MANIFEST.sha256
   vendor/base-bash-libs/lib/bash/base-bash-libs.release
 )
@@ -29,7 +32,7 @@ for file in "${required_files[@]}"; do
   }
 done
 
-for executable in bin/beacon scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh; do
+for executable in bin/beacon scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh; do
   [[ -x "$executable" ]] || {
     printf 'Expected executable file: %s\n' "$executable" >&2
     exit 1
@@ -42,7 +45,7 @@ command -v shellcheck >/dev/null 2>&1 || {
   printf 'shellcheck is required.\n' >&2
   exit 1
 }
-shellcheck bin/beacon lib/beacon.sh scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh || exit $?
+shellcheck bin/beacon lib/beacon.sh scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh || exit $?
 
 command -v bats >/dev/null 2>&1 || {
   printf 'bats is required.\n' >&2
@@ -51,5 +54,6 @@ command -v bats >/dev/null 2>&1 || {
 bats tests/beacon.bats || exit $?
 
 ./tests/bash-42-smoke.sh || exit $?
+./tests/candidate-smoke.sh "$PWD/vendor/base-bash-libs" || exit $?
 
 printf 'Repository and Beacon validation passed.\n'

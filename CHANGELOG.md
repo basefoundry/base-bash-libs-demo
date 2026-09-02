@@ -13,3 +13,5 @@ and versions are tracked in the repo-root `VERSION` file.
 - Added the Beacon offline support-bundle reference consumer.
 - Vendored and independently verified the canonical Base Bash v2.0.0 release.
 - Added Ubuntu, minimum Bash 4.2.53, and macOS Homebrew Bash validation.
+- Added explicit release/full-commit compatibility checks and a documented,
+  atomic framework pin-update and rollback workflow.
