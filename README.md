@@ -98,6 +98,23 @@ Install BATS and ShellCheck, then run the full gate:
 CI runs the full suite on Ubuntu and macOS with Homebrew Bash, plus a
 network-disabled smoke test on the exact minimum Bash 4.2.53 runtime.
 
+## Standalone release artifacts
+
+Beacon has its own version and release lifecycle, independent of the embedded
+Base Bash version. From a clean checkout whose `VERSION` matches the requested
+version, build and verify the deterministic four-file artifact set locally:
+
+```bash
+./scripts/release-artifact build --version 0.1.0 --output /tmp/beacon-release
+./scripts/release-artifact verify /tmp/beacon-release
+```
+
+The output contains the standalone archive, SHA-256 manifest, SPDX SBOM, and
+SLSA-style provenance. The archive carries both Beacon source identity and the
+distinct vendored framework identity. These commands do not tag, publish, or
+use the network; release publication always requires a separate authorized
+maintainer action. See the [release process](docs/release-process.md).
+
 ## Framework compatibility
 
 The scheduled and manually dispatched `Framework Compatibility` workflow tests
@@ -121,6 +138,7 @@ the immutable-input rules, reviewed pin-update procedure, and rollback path.
 - `tests/lifecycle.bats` exercises failure, signals, cleanup, automation, and
   hostile synthetic fixture data.
 - `tests/docs-examples.sh` executes the exact five-minute tutorial commands.
+- `scripts/release-artifact` builds and verifies standalone release evidence.
 - `tests/validate.sh` verifies the vendor, shell quality, tests, and smoke path.
 
 ## Base

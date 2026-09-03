@@ -65,3 +65,27 @@ jobs:
         run: |
           export PATH="$(brew --prefix)/bin:$PATH"
           ./tests/validate.sh
+
+  artifact:
+    name: Standalone artifact (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - macos-14
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Install supported Bash on macOS
+        if: runner.os == 'macOS'
+        run: brew install bash
+      - name: Build twice and verify the standalone artifact
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            export PATH="$(brew --prefix)/bin:$PATH"
+          fi
+          ./tests/release-artifact.sh
