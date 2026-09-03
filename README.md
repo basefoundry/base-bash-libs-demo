@@ -41,6 +41,10 @@ application state beneath it.
 For a scenario-driven walkthrough whose commands are exercised by CI, follow
 [Beacon in five minutes](docs/five-minute-tutorial.md).
 
+For deterministic success, failure, interruption, cleanup, redaction, and
+non-interactive examples, see
+[lifecycle and automation scenarios](docs/lifecycle-and-automation.md).
+
 ## What Beacon demonstrates
 
 - `beacon status` reports fixture readiness, the consumer Git branch, and the
@@ -55,6 +59,8 @@ For a scenario-driven walkthrough whose commands are exercised by CI, follow
 - `--workspace`, `--output`, `--config`, `--user-config`, `--quiet`,
   `--verbose`, `--dry-run`, and `--non-interactive` compose application policy
   with the Base Bash lifecycle.
+- `collect --scenario failure|interrupt` and `--lifecycle-log` provide safe,
+  machine-readable evidence for failure and cleanup demonstrations.
 
 ## Framework boundary
 
@@ -112,6 +118,8 @@ the immutable-input rules, reviewed pin-update procedure, and rollback path.
 - `fixtures/workspace` provides deterministic, intentionally fake inputs.
 - `vendor/base-bash-libs` is the verified v2.0.0 release bundle.
 - `tests/beacon.bats` exercises the installed application boundary.
+- `tests/lifecycle.bats` exercises failure, signals, cleanup, automation, and
+  hostile synthetic fixture data.
 - `tests/docs-examples.sh` executes the exact five-minute tutorial commands.
 - `tests/validate.sh` verifies the vendor, shell quality, tests, and smoke path.
 

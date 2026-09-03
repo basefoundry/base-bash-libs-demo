@@ -19,6 +19,11 @@ base_cli_option beacon "" workspace value --workspace \
     help="Input workspace" metavar=PATH
 base_cli_option beacon "" output value --output \
     help="Support bundle directory" metavar=PATH
+base_cli_option beacon "" lifecycle_log value --lifecycle-log \
+    help="Append one machine-readable cleanup event" metavar=PATH
+base_cli_option beacon collect scenario value --scenario \
+    default=normal enum=normal,failure,interrupt \
+    help="Deterministic collection scenario" metavar=NAME
 base_app_add_standard_options beacon ""
 
 base_app_init beacon_policy name=beacon description="Beacon collection policy"
@@ -26,10 +31,15 @@ base_app_config_define beacon_policy workspace path \
     default="$beacon_project_root/fixtures/workspace" env=BEACON_WORKSPACE
 base_app_config_define beacon_policy output path \
     default="$beacon_project_root/.beacon-output/beacon-support" env=BEACON_OUTPUT
+base_app_config_define beacon_policy lifecycle_log path \
+    default="" env=BEACON_LIFECYCLE_LOG
+base_app_config_define beacon_policy scenario enum \
+    enum=normal,failure,interrupt default=normal env=BEACON_SCENARIO
 
 declare -a BEACON_SELECTED_FILES=()
 declare -a BEACON_SECRET_VALUES=()
 declare -a BEACON_UNIQUE_SECRET_VALUES=()
+BEACON_ACTIVE_LIFECYCLE_LOG=""
 
 beacon_error() {
     base_std_print_error "$*"
@@ -174,7 +184,8 @@ beacon_plan() {
 }
 
 beacon_collect() {
-    local workspace="$1" output="$2" stage="" relative target hash branch=""
+    local workspace="$1" output="$2" scenario="$3"
+    local stage="" relative target hash branch=""
     local manifest readme
 
     [[ -d "$workspace" ]] || {
@@ -203,6 +214,19 @@ beacon_collect() {
         target="$stage/files/$relative"
         beacon_write_redacted_file "$workspace/$relative" "$target" || return $?
     done
+
+    case "$scenario" in
+        failure)
+            base_std_print_error "Simulated collection failure before publication."
+            return 70
+            ;;
+        interrupt)
+            printf 'scenario=interrupt\nstate=waiting_for_signal\n'
+            while :; do
+                sleep 1
+            done
+            ;;
+    esac
 
     base_git_get_current_branch "$beacon_project_root" branch || return $?
     [[ -n "$branch" ]] || branch="unavailable"
@@ -264,12 +288,16 @@ beacon_verify() {
 }
 
 beacon_cleanup() {
+    if [[ -n "$BEACON_ACTIVE_LIFECYCLE_LOG" ]] &&
+        ((BASE_BASH_LIBS_APP_DRY_RUN == 0)); then
+        printf 'phase=%s\n' "$1" >> "$BEACON_ACTIVE_LIFECYCLE_LOG" || return 1
+    fi
     base_std_log_debug -l beacon.lifecycle "cleanup phase=$1 status=$2"
 }
 
 beacon_execute() {
     local command="${BASE_BASH_LIBS_CLI_RESULT_COMMAND:-}"
-    local workspace output cli_value config_file user_config
+    local workspace output scenario lifecycle_log cli_value config_file user_config
     local -a config_args=()
 
     base_app_apply_standard_options beacon_policy || return $?
@@ -279,17 +307,26 @@ beacon_execute() {
     if base_cli_result_get output cli_value 2>/dev/null; then
         base_app_config_set_cli beacon_policy output "$cli_value" || return $?
     fi
+    if base_cli_result_get lifecycle_log cli_value 2>/dev/null; then
+        base_app_config_set_cli beacon_policy lifecycle_log "$cli_value" || return $?
+    fi
+    if base_cli_result_get scenario cli_value 2>/dev/null; then
+        base_app_config_set_cli beacon_policy scenario "$cli_value" || return $?
+    fi
     base_cli_result_get config config_file 2>/dev/null && config_args+=(--project "$config_file")
     base_cli_result_get user-config user_config 2>/dev/null && config_args+=(--user "$user_config")
     base_app_config_load beacon_policy "${config_args[@]}" || return $?
-    base_app_hook beacon_policy cleanup beacon_cleanup beacon_cleanup || return $?
     base_app_config_get beacon_policy workspace workspace || return $?
     base_app_config_get beacon_policy output output || return $?
+    base_app_config_get beacon_policy scenario scenario || return $?
+    base_app_config_get beacon_policy lifecycle_log lifecycle_log || return $?
+    BEACON_ACTIVE_LIFECYCLE_LOG="$lifecycle_log"
+    base_app_hook beacon_policy cleanup beacon_cleanup beacon_cleanup || return $?
 
     case "$command" in
         status) beacon_status "$workspace" ;;
         plan) beacon_plan "$workspace" "$output" ;;
-        collect) beacon_collect "$workspace" "$output" ;;
+        collect) beacon_collect "$workspace" "$output" "$scenario" ;;
         verify) beacon_verify "$workspace" "$output" ;;
         *)
             beacon_error "Unknown command '$command'."

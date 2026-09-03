@@ -17,10 +17,12 @@ required_files=(
     lib/beacon.sh
     scripts/verify-vendor
     tests/beacon.bats
+    tests/lifecycle.bats
     tests/bash-42-smoke.sh
     tests/candidate-smoke.sh
     tests/docs-examples.sh
     docs/five-minute-tutorial.md
+    docs/lifecycle-and-automation.md
     docs/framework-updates.md
     .github/workflows/framework-compatibility.yml
     vendor/base-bash-libs/MANIFEST.sha256
@@ -55,7 +57,7 @@ command -v bats > /dev/null 2>&1 || {
     printf 'bats is required.\n' >&2
     exit 1
 }
-bats tests/beacon.bats || exit $?
+bats tests/beacon.bats tests/lifecycle.bats || exit $?
 
 ./tests/bash-42-smoke.sh || exit $?
 ./tests/candidate-smoke.sh "$PWD/vendor/base-bash-libs" || exit $?

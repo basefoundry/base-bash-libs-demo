@@ -9,6 +9,12 @@ smoke_output="$smoke_temp/bundle"
 "$smoke_root/bin/beacon" plan --output "$smoke_output" | grep -F 'selected_files=3' >/dev/null || exit $?
 "$smoke_root/bin/beacon" collect --dry-run --output "$smoke_output" | grep -F 'dry_run=true' >/dev/null || exit $?
 [[ ! -e "$smoke_output" ]] || exit 1
+"$smoke_root/bin/beacon" collect --scenario failure \
+    --output "$smoke_output" --lifecycle-log "$smoke_temp/lifecycle.log" >/dev/null 2>&1
+smoke_failure_status=$?
+[[ "$smoke_failure_status" == 70 ]] || exit 1
+[[ ! -e "$smoke_output" ]] || exit 1
+grep -Fx 'phase=cleanup' "$smoke_temp/lifecycle.log" >/dev/null || exit $?
 "$smoke_root/bin/beacon" collect --output "$smoke_output" >/dev/null || exit $?
 "$smoke_root/bin/beacon" verify --output "$smoke_output" | grep -F 'verified=true' >/dev/null || exit $?
 
