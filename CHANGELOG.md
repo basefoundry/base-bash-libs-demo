@@ -21,3 +21,6 @@ and versions are tracked in the repo-root `VERSION` file.
 - Added deterministic pre-publication failure and interruption scenarios,
   machine-readable cleanup evidence, documented exit statuses, and focused
   lifecycle, automation, and hostile-fixture redaction coverage.
+- Added deterministic standalone Beacon archives with checksums, SPDX SBOMs,
+  source/framework provenance, cross-platform verification, release notes, and
+  rollback guidance without granting publication authority.
