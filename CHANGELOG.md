@@ -15,3 +15,6 @@ and versions are tracked in the repo-root `VERSION` file.
 - Added Ubuntu, minimum Bash 4.2.53, and macOS Homebrew Bash validation.
 - Added explicit release/full-commit compatibility checks and a documented,
   atomic framework pin-update and rollback workflow.
+- Added an executable five-minute Beacon learning path covering immutable
+  package identity, public imports, lifecycle behavior, application policy,
+  dry-run safety, verification, and extension boundaries.
