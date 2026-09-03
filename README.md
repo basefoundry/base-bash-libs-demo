@@ -38,6 +38,9 @@ directory before repeating the real collection, or select an unused destination:
 `collect --dry-run` creates neither the output directory nor temporary
 application state beneath it.
 
+For a scenario-driven walkthrough whose commands are exercised by CI, follow
+[Beacon in five minutes](docs/five-minute-tutorial.md).
+
 ## What Beacon demonstrates
 
 - `beacon status` reports fixture readiness, the consumer Git branch, and the
@@ -109,6 +112,7 @@ the immutable-input rules, reviewed pin-update procedure, and rollback path.
 - `fixtures/workspace` provides deterministic, intentionally fake inputs.
 - `vendor/base-bash-libs` is the verified v2.0.0 release bundle.
 - `tests/beacon.bats` exercises the installed application boundary.
+- `tests/docs-examples.sh` executes the exact five-minute tutorial commands.
 - `tests/validate.sh` verifies the vendor, shell quality, tests, and smoke path.
 
 ## Base
