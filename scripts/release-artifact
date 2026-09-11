@@ -89,6 +89,7 @@ artifact_copy_payload() {
         docs/release-process.md
         docs/release-notes-template.md
         docs/why-base-bash-libs.md
+        docs/should-i-use-base-bash-libs.md
         fixtures/workspace
         lib/beacon.sh
         scripts/release-artifact

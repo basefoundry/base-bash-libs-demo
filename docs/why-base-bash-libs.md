@@ -50,6 +50,9 @@ Base Bash also requires Bash 4.2 or newer; it does not turn Bash into a
 cross-language runtime or make macOS `/bin/bash` 3.2 sufficient. Those are
 adoption constraints, not hidden implementation details.
 
+The [adoption decision guide](should-i-use-base-bash-libs.md) examines those
+constraints, maintenance costs, and alternatives directly.
+
 ## The resulting trade
 
 The application carries a pinned, verified dependency and follows its public

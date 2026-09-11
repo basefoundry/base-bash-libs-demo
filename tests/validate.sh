@@ -26,6 +26,7 @@ required_files=(
     tests/release-artifact.sh
     docs/five-minute-tutorial.md
     docs/why-base-bash-libs.md
+    docs/should-i-use-base-bash-libs.md
     docs/lifecycle-and-automation.md
     docs/framework-updates.md
     docs/release-notes-template.md
