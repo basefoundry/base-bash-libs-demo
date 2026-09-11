@@ -12,6 +12,19 @@ Beacon does not require Base, Docker, cloud credentials, or network access at
 runtime. The verified `base-bash-libs` v2.0.0 release bundle is committed under
 `vendor/base-bash-libs`, so a fresh clone has everything it needs.
 
+## Start here
+
+- [Base Bash overview](https://github.com/basefoundry/base-bash-libs)
+- [Versioned documentation map](https://github.com/basefoundry/base-bash-libs/blob/main/docs/README.md)
+- [Five-minute v2 quickstart](https://github.com/basefoundry/base-bash-libs/blob/main/docs/v2/quickstart.md)
+- [Generated public API reference](https://github.com/basefoundry/base-bash-libs/blob/main/docs/api-reference.md)
+- [Beacon documentation and recommended reading path](docs/README.md)
+
+To move directly from evaluation to a small application, follow
+[use Base Bash in your project](docs/use-in-your-project.md). It contains a
+copy-pasteable one-command consumer and both vendored and Homebrew launch
+paths.
+
 ## Why base-bash-libs?
 
 Non-trivial Bash tools repeatedly rebuild the same infrastructure: consistent
@@ -150,12 +163,14 @@ the immutable-input rules, reviewed pin-update procedure, and rollback path.
 - `bin/beacon` selects the committed Base Bash launcher.
 - `lib/beacon.sh` contains the consumer-owned CLI and application policy.
 - `fixtures/workspace` provides deterministic, intentionally fake inputs.
+- `examples/minimal-cli` is the tested smallest runnable CLI consumer.
 - `vendor/base-bash-libs` is the verified v2.0.0 release bundle.
 - `tests/beacon.bats` exercises the installed application boundary.
 - `tests/lifecycle.bats` exercises failure, signals, cleanup, automation, and
   hostile synthetic fixture data.
 - `tests/docs-examples.sh` executes the exact five-minute tutorial commands.
 - `tests/docs-contracts.sh` checks adoption-document links and API evidence.
+- `tests/minimal-consumer.sh` runs the starter through the vendored launcher.
 - `scripts/release-artifact` builds and verifies standalone release evidence.
 - `tests/validate.sh` verifies the vendor, shell quality, tests, and smoke path.
 

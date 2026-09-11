@@ -28,3 +28,5 @@ and versions are tracked in the repo-root `VERSION` file.
   replaces while preserving Beacon's application-owned policy boundaries.
 - Added a candid Base Bash adoption guide covering fit, runtime constraints,
   maintenance cost, alternatives, maturity, and independent-evidence limits.
+- Added a tested minimal consumer, upstream getting-started links, an ordered
+  documentation map, and repository-specific agent workflow guidance.

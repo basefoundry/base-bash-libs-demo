@@ -1,0 +1,20 @@
+#!/usr/bin/env base-bash
+
+# shellcheck shell=bash
+
+base_std_import cli/lib_cli.sh
+base_require_version 2.0.0 || base_std_fatal_error "This example requires Base Bash 2.0.0 or newer."
+
+base_cli_model_init starter \
+    name=starter version=0.1.0 \
+    description="Minimal Base Bash consumer"
+base_cli_command starter greet "Greet one person" handler=starter_greet
+base_cli_positional starter greet name required=true metavar=NAME
+
+starter_greet() {
+    printf 'Hello, %s!\n' "$1"
+}
+
+main() {
+    base_cli_run starter -- "$@"
+}

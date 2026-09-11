@@ -6,6 +6,9 @@ docs_contract_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 docs_contract_readme="$docs_contract_root/README.md"
 docs_contract_why="$docs_contract_root/docs/why-base-bash-libs.md"
 docs_contract_decision="$docs_contract_root/docs/should-i-use-base-bash-libs.md"
+docs_contract_index="$docs_contract_root/docs/README.md"
+docs_contract_starter="$docs_contract_root/docs/use-in-your-project.md"
+docs_contract_example="$docs_contract_root/examples/minimal-cli"
 docs_contract_manifest="$docs_contract_root/vendor/base-bash-libs/base_api_manifest.yaml"
 docs_contract_consumer="$docs_contract_root/lib/beacon.sh"
 
@@ -14,6 +17,44 @@ grep -Fq '[should I use Base Bash?](docs/should-i-use-base-bash-libs.md)' "$docs
 grep -Fq '[five-minute Beacon tutorial](five-minute-tutorial.md)' "$docs_contract_why"
 grep -Fq '[adoption decision guide](should-i-use-base-bash-libs.md)' "$docs_contract_why"
 grep -Fq '[five-minute Beacon tutorial](five-minute-tutorial.md)' "$docs_contract_decision"
+grep -Fq '[Beacon documentation and recommended reading path](docs/README.md)' "$docs_contract_readme"
+grep -Fq '[use Base Bash in your project](docs/use-in-your-project.md)' "$docs_contract_readme"
+
+docs_contract_expected_example="$(
+    sed -n '/^<!-- BEGIN MINIMAL CONSUMER -->$/,/^<!-- END MINIMAL CONSUMER -->$/p' \
+        "$docs_contract_starter" |
+        sed -e '1d' -e '$d' -e '/^```bash$/d' -e '/^```$/d'
+)"
+docs_contract_actual_example="$(sed -n '1,$p' "$docs_contract_example")"
+[[ "$docs_contract_expected_example" == "$docs_contract_actual_example" ]] || {
+    printf 'Documented minimal consumer differs from examples/minimal-cli.\n' >&2
+    exit 1
+}
+
+for docs_contract_path in \
+    why-base-bash-libs.md \
+    should-i-use-base-bash-libs.md \
+    use-in-your-project.md \
+    five-minute-tutorial.md \
+    lifecycle-and-automation.md \
+    framework-updates.md \
+    release-process.md; do
+    grep -Fq "($docs_contract_path)" "$docs_contract_index" || {
+        printf 'Documentation index is missing %s.\n' "$docs_contract_path" >&2
+        exit 1
+    }
+done
+
+for docs_contract_url in \
+    'https://github.com/basefoundry/base-bash-libs' \
+    'https://github.com/basefoundry/base-bash-libs/blob/main/docs/README.md' \
+    'https://github.com/basefoundry/base-bash-libs/blob/main/docs/v2/quickstart.md' \
+    'https://github.com/basefoundry/base-bash-libs/blob/main/docs/api-reference.md'; do
+    grep -Fq "$docs_contract_url" "$docs_contract_readme" || {
+        printf 'README is missing upstream onboarding link: %s\n' "$docs_contract_url" >&2
+        exit 1
+    }
+done
 
 for docs_contract_heading in \
     '## Good fit' \

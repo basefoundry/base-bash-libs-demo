@@ -84,12 +84,15 @@ artifact_copy_payload() {
         base_manifest.yaml
         bin/beacon
         docs/five-minute-tutorial.md
+        docs/README.md
         docs/framework-updates.md
         docs/lifecycle-and-automation.md
         docs/release-process.md
         docs/release-notes-template.md
         docs/why-base-bash-libs.md
         docs/should-i-use-base-bash-libs.md
+        docs/use-in-your-project.md
+        examples/minimal-cli
         fixtures/workspace
         lib/beacon.sh
         scripts/release-artifact
@@ -141,6 +144,7 @@ artifact_copy_payload() {
     done < <(find "$destination" -type f -print)
     chmod 0755 \
         "$destination/bin/beacon" \
+        "$destination/examples/minimal-cli" \
         "$destination/scripts/release-artifact" \
         "$destination/scripts/verify-vendor" \
         "$destination/vendor/base-bash-libs/bin/base-bash" || return 1
