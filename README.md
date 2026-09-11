@@ -12,6 +12,21 @@ Beacon does not require Base, Docker, cloud credentials, or network access at
 runtime. The verified `base-bash-libs` v2.0.0 release bundle is committed under
 `vendor/base-bash-libs`, so a fresh clone has everything it needs.
 
+## Why base-bash-libs?
+
+Non-trivial Bash tools repeatedly rebuild the same infrastructure: consistent
+commands and help, configuration precedence, temporary-directory cleanup,
+signal-safe lifecycle handling, checked filesystem operations, and portable
+package identity. Base Bash supplies those reusable contracts so an
+application can concentrate on its own policy.
+
+Beacon makes that division concrete. Base Bash declares and runs the CLI,
+loads typed configuration, owns cleanup registration, and exposes immutable
+framework identity. Beacon decides which support files matter, how their data
+must be redacted, and what collection and verification mean. See
+[why Base Bash](docs/why-base-bash-libs.md) for the code-level before/after and
+the boundaries that remain application-owned.
+
 ## Quick start
 
 Use Bash 4.2 or newer. On macOS, install a supported Bash with Homebrew; the
@@ -138,6 +153,7 @@ the immutable-input rules, reviewed pin-update procedure, and rollback path.
 - `tests/lifecycle.bats` exercises failure, signals, cleanup, automation, and
   hostile synthetic fixture data.
 - `tests/docs-examples.sh` executes the exact five-minute tutorial commands.
+- `tests/docs-contracts.sh` checks adoption-document links and API evidence.
 - `scripts/release-artifact` builds and verifies standalone release evidence.
 - `tests/validate.sh` verifies the vendor, shell quality, tests, and smoke path.
 
