@@ -5,11 +5,40 @@ set -euo pipefail
 docs_contract_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 docs_contract_readme="$docs_contract_root/README.md"
 docs_contract_why="$docs_contract_root/docs/why-base-bash-libs.md"
+docs_contract_decision="$docs_contract_root/docs/should-i-use-base-bash-libs.md"
 docs_contract_manifest="$docs_contract_root/vendor/base-bash-libs/base_api_manifest.yaml"
 docs_contract_consumer="$docs_contract_root/lib/beacon.sh"
 
 grep -Fq '[why Base Bash](docs/why-base-bash-libs.md)' "$docs_contract_readme"
+grep -Fq '[should I use Base Bash?](docs/should-i-use-base-bash-libs.md)' "$docs_contract_readme"
 grep -Fq '[five-minute Beacon tutorial](five-minute-tutorial.md)' "$docs_contract_why"
+grep -Fq '[adoption decision guide](should-i-use-base-bash-libs.md)' "$docs_contract_why"
+grep -Fq '[five-minute Beacon tutorial](five-minute-tutorial.md)' "$docs_contract_decision"
+
+for docs_contract_heading in \
+    '## Good fit' \
+    '## Poor fit' \
+    '## Runtime prerequisites' \
+    '## What adoption costs' \
+    '## Alternatives' \
+    '## Maturity and support' \
+    '## Decision checklist'; do
+    grep -Fqx "$docs_contract_heading" "$docs_contract_decision" || {
+        printf 'Adoption decision guide is missing heading: %s\n' "$docs_contract_heading" >&2
+        exit 1
+    }
+done
+
+for docs_contract_url in \
+    'https://github.com/ko1nksm/getoptions' \
+    'https://github.com/bashly-framework/bashly' \
+    'https://github.com/niieani/bash-oo-framework' \
+    'https://github.com/basefoundry/base-bash-libs/issues/239'; do
+    grep -Fq "$docs_contract_url" "$docs_contract_decision" || {
+        printf 'Adoption decision guide is missing source: %s\n' "$docs_contract_url" >&2
+        exit 1
+    }
+done
 
 docs_contract_symbols=(
     base_cli_model_init

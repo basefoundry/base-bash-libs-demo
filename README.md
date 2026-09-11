@@ -25,7 +25,9 @@ loads typed configuration, owns cleanup registration, and exposes immutable
 framework identity. Beacon decides which support files matter, how their data
 must be redacted, and what collection and verification mean. See
 [why Base Bash](docs/why-base-bash-libs.md) for the code-level before/after and
-the boundaries that remain application-owned.
+the boundaries that remain application-owned. If you are evaluating it for
+your own project, read [should I use Base Bash?](docs/should-i-use-base-bash-libs.md)
+for prerequisites, adoption costs, alternatives, and maturity signals.
 
 ## Quick start
 

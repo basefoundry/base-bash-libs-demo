@@ -26,3 +26,5 @@ and versions are tracked in the repo-root `VERSION` file.
   rollback guidance without granting publication authority.
 - Added a code-linked explanation of the Bash infrastructure Base Bash
   replaces while preserving Beacon's application-owned policy boundaries.
+- Added a candid Base Bash adoption guide covering fit, runtime constraints,
+  maintenance cost, alternatives, maturity, and independent-evidence limits.
