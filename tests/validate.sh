@@ -22,8 +22,10 @@ required_files=(
     tests/bash-42-smoke.sh
     tests/candidate-smoke.sh
     tests/docs-examples.sh
+    tests/docs-contracts.sh
     tests/release-artifact.sh
     docs/five-minute-tutorial.md
+    docs/why-base-bash-libs.md
     docs/lifecycle-and-automation.md
     docs/framework-updates.md
     docs/release-notes-template.md
@@ -39,7 +41,7 @@ for file in "${required_files[@]}"; do
     }
 done
 
-for executable in bin/beacon scripts/release-artifact scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/release-artifact.sh; do
+for executable in bin/beacon scripts/release-artifact scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/release-artifact.sh; do
     [[ -x "$executable" ]] || {
         printf 'Expected executable file: %s\n' "$executable" >&2
         exit 1
@@ -52,9 +54,10 @@ command -v shellcheck > /dev/null 2>&1 || {
     printf 'shellcheck is required.\n' >&2
     exit 1
 }
-shellcheck bin/beacon lib/beacon.sh scripts/release-artifact scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/release-artifact.sh || exit $?
+shellcheck bin/beacon lib/beacon.sh scripts/release-artifact scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/release-artifact.sh || exit $?
 
 ./tests/docs-examples.sh || exit $?
+./tests/docs-contracts.sh || exit $?
 
 command -v bats > /dev/null 2>&1 || {
     printf 'bats is required.\n' >&2

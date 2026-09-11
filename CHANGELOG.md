@@ -24,3 +24,5 @@ and versions are tracked in the repo-root `VERSION` file.
 - Added deterministic standalone Beacon archives with checksums, SPDX SBOMs,
   source/framework provenance, cross-platform verification, release notes, and
   rollback guidance without granting publication authority.
+- Added a code-linked explanation of the Bash infrastructure Base Bash
+  replaces while preserving Beacon's application-owned policy boundaries.
