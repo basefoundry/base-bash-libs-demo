@@ -20,6 +20,7 @@ required_files=(
     scripts/artifact-evidence.py
     tests/requirements-artifacts.txt
     tests/validate-spdx.py
+    tests/artifact-evidence.py
     scripts/verify-vendor
     tests/beacon.bats
     tests/lifecycle.bats

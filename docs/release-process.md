@@ -33,6 +33,7 @@ From the clean release commit, build the four assets without publishing them:
 ./scripts/release-artifact build --version X.Y.Z --output /tmp/beacon-release-b
 diff -r /tmp/beacon-release-a /tmp/beacon-release-b
 ./scripts/release-artifact verify /tmp/beacon-release-a
+./scripts/release-artifact verify /tmp/beacon-release-a --trusted-smoke
 ```
 
 The directory contains:
@@ -51,9 +52,20 @@ tar implementations or versions. Existing published assets are never replaced.
 - `beacon-vX.Y.Z.provenance.json`, binding the archive to the clean Beacon
   source commit and immutable Base Bash commit.
 
-The verifier rejects missing, extra, renamed, or modified evidence assets;
-unsafe archive paths or symlinks; malformed identity; vendor drift; and failed
-Beacon status, dry-run, collection, or verification smoke checks. CI builds the
+The default verifier never executes payload code. It rejects missing, extra,
+renamed, or modified assets; duplicate JSON keys; inconsistent SPDX inventories,
+checksums, packages or relationships; and incorrect provenance subjects or source
+dependencies. Every archive header is checked before extraction: only unique,
+canonical regular files with mode 0644/0755 are supported, with no links, special
+files, sparse files or extended headers. Limits are 10,000 entries, 16 MiB per file,
+and 128 MiB total uncompressed content. Vendor inventory and identity are checked
+without executing the vendored verifier.
+
+This proves internal consistency, not publisher authenticity. Obtain assets and
+the verifier from a trusted release/source. Only then use `--trusted-smoke`, which
+additionally executes bundled vendor checks and Beacon status, dry-run, collection,
+and verification. Local build tests explicitly opt in for their own artifacts.
+CI builds the
 set twice and verifies it on Ubuntu and macOS. The build and verifier are local
 preparation tools: they never create a tag, GitHub Release, or network request.
 

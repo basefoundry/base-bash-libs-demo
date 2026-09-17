@@ -137,10 +137,13 @@ version, build and verify the deterministic four-file artifact set locally:
 ```bash
 ./scripts/release-artifact build --version 0.1.0 --output /tmp/beacon-release
 ./scripts/release-artifact verify /tmp/beacon-release
+./scripts/release-artifact verify /tmp/beacon-release --trusted-smoke
 ```
 
 The output contains the standalone archive, SHA-256 manifest, SPDX SBOM, and
-SLSA-style provenance. The archive carries both Beacon source identity and the
+SLSA-style provenance. Default verification does not execute payload code; the
+`--trusted-smoke` option explicitly runs checks from a trusted artifact. Internal
+consistency is not proof of publisher authenticity. The archive carries both Beacon source identity and the
 distinct vendored framework identity. These commands do not tag, publish, or
 use the network; release publication always requires a separate authorized
 maintainer action. See the [release process](docs/release-process.md).
