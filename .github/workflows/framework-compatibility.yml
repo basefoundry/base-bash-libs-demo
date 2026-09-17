@@ -6,33 +6,34 @@ on:
   workflow_dispatch:
     inputs:
       framework_ref:
-        description: Immutable release tag or full base-bash-libs commit
-        required: true
-        default: v2.0.0
+        description: Optional immutable tag or full commit; blank tests baseline and current release
+        required: false
+        default: ''
         type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.framework_ref || 'v2.0.0' }}
+  group: ${{ github.workflow }}-${{ inputs.framework_ref || 'baseline-and-current' }}
   cancel-in-progress: true
 
 jobs:
   candidate:
-    name: Candidate (${{ matrix.os }})
+    name: Candidate (${{ matrix.os }}, ${{ matrix.framework_ref }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
+        framework_ref: ${{ fromJSON(inputs.framework_ref && format('[{0}]', toJSON(inputs.framework_ref)) || '["v2.0.0","v2.1.0"]') }}
         os:
           - ubuntu-24.04
           - macos-14
     steps:
       - name: Reject moving references
         env:
-          FRAMEWORK_REF: ${{ inputs.framework_ref || 'v2.0.0' }}
+          FRAMEWORK_REF: ${{ matrix.framework_ref }}
         run: |
           case "$FRAMEWORK_REF" in
             main|master|HEAD|refs/heads/*)
@@ -50,7 +51,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: basefoundry/base-bash-libs
-          ref: ${{ inputs.framework_ref || 'v2.0.0' }}
+          ref: ${{ matrix.framework_ref }}
           path: .framework-candidate
           persist-credentials: false
       - name: Install supported Bash on macOS
@@ -58,7 +59,7 @@ jobs:
         run: brew install bash
       - name: Exercise the candidate through Beacon
         env:
-          EXPECTED_REF: ${{ inputs.framework_ref || 'v2.0.0' }}
+          EXPECTED_REF: ${{ matrix.framework_ref }}
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             export PATH="$(brew --prefix)/bin:$PATH"
