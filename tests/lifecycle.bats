@@ -13,6 +13,82 @@ teardown() {
     rm -rf "$TEST_ROOT"
 }
 
+@test "a destination created during staging is preserved without nested output" {
+    cp -R "$REPO_ROOT/fixtures/workspace" "$TEST_ROOT/workspace"
+    for ((i=0; i<10000; i++)); do printf 'synthetic log %s\n' "$i"; done > "$TEST_ROOT/workspace/logs/app.log"
+    env TMPDIR="$TEST_STAGE_ROOT" "$REPO_ROOT/bin/beacon" collect \
+        --workspace "$TEST_ROOT/workspace" --output "$TEST_OUTPUT" > "$TEST_ROOT/stdout" 2> "$TEST_ROOT/stderr" &
+    collector=$!
+    ready=no
+    for _ in {1..200}; do
+        if [[ -n "$(find "$TEST_STAGE_ROOT" -name app.log -print -quit)" ]]; then ready=yes; break; fi
+        sleep 0.01
+    done
+    mkdir "$TEST_OUTPUT"
+    printf preserve > "$TEST_OUTPUT/competitor"
+    result=0
+    wait "$collector" || result=$?
+    [ "$ready" = yes ]
+    [ "$result" -ne 0 ]
+    [ "$(cat "$TEST_OUTPUT/competitor")" = preserve ]
+    [ "$(find "$TEST_OUTPUT" -mindepth 1 | wc -l | tr -d ' ')" -eq 1 ]
+    ! grep -q '^bundle=' "$TEST_ROOT/stdout"
+    assert_staging_is_empty
+}
+
+@test "simultaneous collectors publish exactly one verified bundle" {
+    env TMPDIR="$TEST_STAGE_ROOT" "$REPO_ROOT/bin/beacon" collect --output "$TEST_OUTPUT" > "$TEST_ROOT/one" 2>&1 &
+    first=$!
+    env TMPDIR="$TEST_STAGE_ROOT" "$REPO_ROOT/bin/beacon" collect --output "$TEST_OUTPUT" > "$TEST_ROOT/two" 2>&1 &
+    second=$!
+    first_status=0 second_status=0
+    wait "$first" || first_status=$?
+    wait "$second" || second_status=$?
+    [ "$((first_status + second_status))" -eq 1 ]
+    run "$REPO_ROOT/bin/beacon" verify --output "$TEST_OUTPUT"
+    [ "$status" -eq 0 ]
+    assert_staging_is_empty
+}
+
+@test "preexisting files and dangling output links are preserved" {
+    printf preserve > "$TEST_OUTPUT"
+    run "$REPO_ROOT/bin/beacon" collect --output "$TEST_OUTPUT"
+    [ "$status" -eq 1 ]
+    [ "$(cat "$TEST_OUTPUT")" = preserve ]
+    rm "$TEST_OUTPUT"
+    ln -s "$TEST_ROOT/missing" "$TEST_OUTPUT"
+    run "$REPO_ROOT/bin/beacon" collect --output "$TEST_OUTPUT"
+    [ "$status" -eq 1 ]
+    [ -L "$TEST_OUTPUT" ]
+    [ ! -e "$TEST_ROOT/missing" ]
+}
+
+@test "relative output reservations remain supported" {
+    cd "$TEST_ROOT"
+    run "$REPO_ROOT/bin/beacon" collect --output 'relative bundle'
+    [ "$status" -eq 0 ]
+    [ -f 'relative bundle/MANIFEST.sha256' ]
+}
+
+@test "publication failure cleans the owned reservation and staging" {
+    mkdir "$TEST_ROOT/tools"
+    real_mv="$(command -v mv)"
+    cat > "$TEST_ROOT/tools/mv" <<'SH'
+#!/usr/bin/env bash
+case "${*: -1}" in
+    */beacon-support/MANIFEST.sha256) exit 42 ;;
+esac
+exec "$BEACON_TEST_REAL_MV" "$@"
+SH
+    chmod +x "$TEST_ROOT/tools/mv"
+    run env PATH="$TEST_ROOT/tools:$PATH" BEACON_TEST_REAL_MV="$real_mv" TMPDIR="$TEST_STAGE_ROOT" \
+        "$REPO_ROOT/bin/beacon" collect --output "$TEST_OUTPUT"
+    [ "$status" -eq 42 ]
+    [ ! -e "$TEST_OUTPUT" ]
+    [[ "$output" != *bundle=* ]]
+    assert_staging_is_empty
+}
+
 assert_single_cleanup() {
     [ "$(wc -l < "$TEST_LIFECYCLE_LOG" | tr -d ' ')" -eq 1 ]
     [ "$(cat "$TEST_LIFECYCLE_LOG")" = "phase=cleanup" ]

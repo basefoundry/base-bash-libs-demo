@@ -227,7 +227,7 @@ beacon_plan() {
 beacon_collect() {
     local workspace="$1" output="$2" scenario="$3"
     local stage="" relative target hash branch=""
-    local manifest readme
+    local manifest readme owned_output
 
     [[ -d "$workspace" ]] || {
         beacon_error "Workspace '$workspace' does not exist."
@@ -245,7 +245,7 @@ beacon_collect() {
             "$output" "${#BEACON_SELECTED_FILES[@]}"
         return 0
     fi
-    [[ ! -e "$output" ]] || {
+    [[ ! -e "$output" && ! -L "$output" ]] || {
         beacon_error "Output '$output' already exists; choose an unused path."
         return $?
     }
@@ -292,8 +292,22 @@ beacon_collect() {
     done
 
     base_std_safe_mkdir -p "$(dirname -- "$output")" || return $?
-    base_std_run mv -- "$stage" "$output" || return $?
-    base_std_unregister_cleanup_path "$stage" || return $?
+    # mkdir (without -p) is the exclusive reservation. Never move a directory
+    # onto an unreserved destination: mv would nest it if another creator won.
+    if ! mkdir -- "$output"; then
+        beacon_error "Cannot reserve output '$output'; another creator may own it."
+        return 1
+    fi
+    owned_output="$(cd -- "$output" && pwd -P)" || return 1
+    if ! base_std_register_cleanup_path "$owned_output"; then
+        rmdir -- "$output"
+        return 1
+    fi
+    for relative in files README.txt MANIFEST.sha256; do
+        base_std_run mv -- "$stage/$relative" "$output/$relative" || return $?
+    done
+    beacon_verify "$workspace" "$output" > /dev/null || return $?
+    base_std_unregister_cleanup_path "$owned_output" || return $?
     printf 'bundle=%s\nmanifest=%s\n' "$output" "$output/MANIFEST.sha256"
 }
 
