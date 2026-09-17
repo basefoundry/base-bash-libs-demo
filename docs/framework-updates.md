@@ -54,3 +54,15 @@ Revert the complete dependency-update pull request so the vendor tree, lock,
 release evidence, and changelog move back together. Run the same local and
 hosted gates against the restored pin. Do not repair a failed update by copying
 individual library files from an older package.
+# Canary coverage
+
+Scheduled runs cover the immutable v2.0.0 baseline and current supported v2.1.0
+release on Ubuntu and macOS. A manual immutable reference tests that candidate;
+leaving it blank runs both release rows. This coverage does not change the
+committed v2.0.0 vendor pin. Advance the current-release row deliberately when a
+new supported release is adopted for compatibility testing.
+
+The canary checks producer status independently of output, quiet stderr,
+configuration precedence, success/failure/TERM cleanup, and dry-run no-write
+behavior. Its temporary directory is removed on success and failure. Synthetic
+launchers returning 42 after valid output prove that the canary fails closed.

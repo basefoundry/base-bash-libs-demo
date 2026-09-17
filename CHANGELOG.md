@@ -13,6 +13,8 @@ and versions are tracked in the repo-root `VERSION` file.
   entries before extraction and require explicit trust before executing smoke tests.
 
 - Emit independently validated SPDX 2.3 file and package evidence with SHA1 and SHA256.
+- Enforce candidate exit statuses, cleanup and critical contracts; test baseline
+  and current supported releases without changing the vendor pin.
 
 - Reserve bundle destinations exclusively to prevent concurrent publication nesting.
 - Honor user configuration and scenario precedence without implicit CLI overrides.

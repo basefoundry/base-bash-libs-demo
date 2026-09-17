@@ -53,7 +53,7 @@ jobs:
             --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly" \
             --workdir /workspace \
             docker.io/library/bash@sha256:0931edd3941d0603cb3d5da1cb298cf3eb6a579e09e094c3e34e2d5e9df8cddc \
-            bash tests/bash-42-smoke.sh
+            bash -c 'bash tests/bash-42-smoke.sh && bash tests/candidate-smoke.sh /workspace/vendor/base-bash-libs'
 
   macos:
     name: macOS Homebrew Bash validation

@@ -416,6 +416,9 @@ beacon_execute() {
     local -a config_args=()
 
     base_app_apply_standard_options beacon_policy || return $?
+    if ((BASE_BASH_LIBS_APP_QUIET)); then
+        base_std_set_log_level WARN || return $?
+    fi
     if base_cli_result_get workspace cli_value 2>/dev/null; then
         base_app_config_set_cli beacon_policy workspace "$cli_value" || return $?
     fi
