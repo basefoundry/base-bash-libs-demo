@@ -23,7 +23,11 @@ jobs:
       - name: Install validation tools
         run: sudo apt-get update && sudo apt-get install -y bats shellcheck
       - name: Validate consumer
-        run: ./tests/validate.sh
+        run: |
+          python3 -m venv "$RUNNER_TEMP/spdx"
+          "$RUNNER_TEMP/spdx/bin/pip" install -r tests/requirements-artifacts.txt
+          export SPDX_VALIDATOR_PYTHON="$RUNNER_TEMP/spdx/bin/python"
+          ./tests/validate.sh
 
   bash-42:
     name: Minimum runtime (Bash 4.2.53)
@@ -64,6 +68,9 @@ jobs:
       - name: Validate consumer
         run: |
           export PATH="$(brew --prefix)/bin:$PATH"
+          python3 -m venv "$RUNNER_TEMP/spdx"
+          "$RUNNER_TEMP/spdx/bin/pip" install -r tests/requirements-artifacts.txt
+          export SPDX_VALIDATOR_PYTHON="$RUNNER_TEMP/spdx/bin/python"
           ./tests/validate.sh
 
   artifact:
@@ -88,4 +95,7 @@ jobs:
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             export PATH="$(brew --prefix)/bin:$PATH"
           fi
+          python3 -m venv "$RUNNER_TEMP/spdx"
+          "$RUNNER_TEMP/spdx/bin/pip" install -r tests/requirements-artifacts.txt
+          export SPDX_VALIDATOR_PYTHON="$RUNNER_TEMP/spdx/bin/python"
           ./tests/release-artifact.sh

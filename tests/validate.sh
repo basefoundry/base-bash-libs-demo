@@ -17,6 +17,9 @@ required_files=(
     examples/minimal-cli
     lib/beacon.sh
     scripts/release-artifact
+    scripts/artifact-evidence.py
+    tests/requirements-artifacts.txt
+    tests/validate-spdx.py
     scripts/verify-vendor
     tests/beacon.bats
     tests/lifecycle.bats

@@ -9,6 +9,8 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ### Fixed
 
+- Emit independently validated SPDX 2.3 file and package evidence with SHA1 and SHA256.
+
 - Reserve bundle destinations exclusively to prevent concurrent publication nesting.
 - Honor user configuration and scenario precedence without implicit CLI overrides.
 - Normalize release timestamps in UTC and test cross-timezone reproducibility.

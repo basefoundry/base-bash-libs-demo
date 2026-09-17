@@ -11,6 +11,21 @@ release, and a framework pin update does not publish Beacon by itself.
 
 ## Standalone Artifact Gate
 
+Artifact tests require the independent pinned SPDX validator. Install it once in
+a virtual environment and point the tests at that interpreter:
+
+```bash
+python3 -m venv /tmp/beacon-spdx-validator
+/tmp/beacon-spdx-validator/bin/pip install -r tests/requirements-artifacts.txt
+export SPDX_VALIDATOR_PYTHON=/tmp/beacon-spdx-validator/bin/python
+```
+
+The test gate requires zero semantic validation messages from spdx-tools 0.8.5.
+The generator uses only Python's standard library and remains offline. SHA1 is
+included for SPDX 2.3 interoperability; SHA256 remains the integrity checksum.
+Package verification codes and CONTAINS relationships partition application
+files and embedded framework files without claiming per-file license analysis.
+
 From the clean release commit, build the four assets without publishing them:
 
 ```bash
