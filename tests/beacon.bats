@@ -10,6 +10,44 @@ teardown() {
     rm -rf "$TEST_ROOT"
 }
 
+@test "selection rejects linked files, linked parents and special files" {
+    mkdir -p "$TEST_ROOT/workspace/config" "$TEST_ROOT/outside"
+    printf 'synthetic-marker\n' > "$TEST_ROOT/outside/app.env"
+    ln -s "$TEST_ROOT/outside/app.env" "$TEST_ROOT/workspace/config/app.env"
+    run "$REPO_ROOT/bin/beacon" collect --workspace "$TEST_ROOT/workspace" --output "$TEST_OUTPUT"
+    [ "$status" -eq 1 ]
+    [ ! -e "$TEST_OUTPUT" ]
+    rm "$TEST_ROOT/workspace/config/app.env"
+    rmdir "$TEST_ROOT/workspace/config"
+    ln -s "$TEST_ROOT/outside" "$TEST_ROOT/workspace/config"
+    run "$REPO_ROOT/bin/beacon" plan --workspace "$TEST_ROOT/workspace"
+    [ "$status" -eq 1 ]
+    rm "$TEST_ROOT/workspace/config"
+    mkdir "$TEST_ROOT/workspace/config"
+    mkfifo "$TEST_ROOT/workspace/config/app.env"
+    run "$REPO_ROOT/bin/beacon" collect --workspace "$TEST_ROOT/workspace" --output "$TEST_OUTPUT"
+    [ "$status" -eq 1 ]
+    [ ! -e "$TEST_OUTPUT" ]
+}
+
+@test "verification rejects linked parents, dangling links and special files" {
+    "$REPO_ROOT/bin/beacon" collect --quiet --output "$TEST_OUTPUT"
+    mv "$TEST_OUTPUT/files" "$TEST_ROOT/payload"
+    ln -s "$TEST_ROOT/payload" "$TEST_OUTPUT/files"
+    run "$REPO_ROOT/bin/beacon" verify --output "$TEST_OUTPUT"
+    [ "$status" -eq 1 ]
+    [[ "$output" != *verified=true* ]]
+    rm "$TEST_OUTPUT/files"
+    mv "$TEST_ROOT/payload" "$TEST_OUTPUT/files"
+    ln -s "$TEST_ROOT/missing" "$TEST_OUTPUT/extra"
+    run "$REPO_ROOT/bin/beacon" verify --output "$TEST_OUTPUT"
+    [ "$status" -eq 1 ]
+    rm "$TEST_OUTPUT/extra"
+    mkfifo "$TEST_OUTPUT/extra"
+    run "$REPO_ROOT/bin/beacon" verify --output "$TEST_OUTPUT"
+    [ "$status" -eq 1 ]
+}
+
 @test "help exposes the flagship commands" {
     run "$REPO_ROOT/bin/beacon" --help
     [ "$status" -eq 0 ]

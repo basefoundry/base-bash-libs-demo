@@ -7,6 +7,10 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject links and special files in selected inputs and verified bundles.
+
 ### Added
 
 - Initialized the repository with the Base-managed repo baseline.

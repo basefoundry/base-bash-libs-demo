@@ -46,6 +46,45 @@ beacon_error() {
     return 1
 }
 
+# The caller owns the root directory; below it, no links or special files are
+# supported. This is a preflight policy, not a concurrent-filesystem sandbox.
+beacon_check_path() {
+    local root="$1" relative="$2" component current="$1"
+    [[ -d "$root" && ! -L "$root" ]] || {
+        beacon_error "Unsafe input root '$root'."; return 1;
+    }
+    [[ -n "$relative" && "$relative" != /* ]] || return 1
+    local -a components=()
+    IFS=/ read -r -a components <<< "$relative"
+    for component in "${components[@]}"; do
+        [[ -n "$component" && "$component" != . && "$component" != .. ]] || {
+            beacon_error "Noncanonical input path."; return 1;
+        }
+        current="$current/$component"
+        [[ ! -L "$current" ]] || {
+            beacon_error "Links are not supported in inputs or bundles."; return 1;
+        }
+        if [[ -e "$current" && ! -d "$current" && ! -f "$current" ]]; then
+            beacon_error "Special files are not supported in inputs or bundles."
+            return 1
+        fi
+    done
+}
+
+beacon_check_bundle_tree() {
+    local root="$1" path listing
+    [[ -d "$root" && ! -L "$root" ]] || {
+        beacon_error "Unsafe bundle root."; return 1;
+    }
+    # Capture find's status before consuming its NUL-delimited result.
+    base_std_make_temp_file listing beacon-inventory || return 1
+    find "$root" -print0 > "$listing" || return 1
+    while IFS= read -r -d '' path; do
+        [[ "$path" == "$root" ]] && continue
+        beacon_check_path "$root" "${path#"$root"/}" || return 1
+    done < "$listing"
+}
+
 beacon_select_files() {
     local workspace="$1" relative
     local -a candidates=(
@@ -56,6 +95,7 @@ beacon_select_files() {
 
     BEACON_SELECTED_FILES=()
     for relative in "${candidates[@]}"; do
+        beacon_check_path "$workspace" "$relative" || return 1
         [[ -f "$workspace/$relative" ]] || continue
         base_list_append BEACON_SELECTED_FILES "$relative" || return $?
     done
@@ -68,6 +108,7 @@ beacon_load_secret_values() {
     # shellcheck disable=SC2034
     BEACON_SECRET_VALUES=()
     BEACON_UNIQUE_SECRET_VALUES=()
+    beacon_check_path "$workspace" config/app.env || return 1
     [[ -f "$workspace/config/app.env" ]] || return 0
 
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -212,6 +253,7 @@ beacon_collect() {
     base_std_make_temp_dir stage beacon-support || return $?
     for relative in "${BEACON_SELECTED_FILES[@]}"; do
         target="$stage/files/$relative"
+        beacon_check_path "$workspace" "$relative" || return 1
         beacon_write_redacted_file "$workspace/$relative" "$target" || return $?
     done
 
@@ -258,6 +300,8 @@ beacon_verify() {
     local workspace="$1" output="$2" expected relative actual secret
     local verified=0
 
+    beacon_check_bundle_tree "$output" || return 1
+
     [[ -d "$output" ]] || {
         beacon_error "Bundle '$output' does not exist."
         return $?
@@ -270,6 +314,7 @@ beacon_verify() {
     while IFS=$'\t' read -r expected relative || [[ -n "$expected$relative" ]]; do
         [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || return 1
         [[ -n "$relative" && "$relative" != /* && "$relative" != *../* ]] || return 1
+        beacon_check_path "$output" "$relative" || return 1
         [[ -f "$output/$relative" ]] || return 1
         beacon_sha256 "$output/$relative" actual || return $?
         [[ "$actual" == "$expected" ]] || return 1
