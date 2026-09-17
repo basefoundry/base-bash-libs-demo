@@ -96,6 +96,7 @@ artifact_copy_payload() {
         fixtures/workspace
         lib/beacon.sh
         scripts/release-artifact
+        scripts/artifact-evidence.py
         scripts/verify-vendor
         vendor/base-bash-libs
         vendor/evidence
@@ -203,44 +204,7 @@ artifact_create_archive() {
 }
 
 artifact_write_sbom() {
-    local output="$1" version="$2" source_commit="$3" root="$4"
-    local framework_version framework_commit path relative first=1 index=0
-
-    framework_version="$(artifact_metadata_value "$root/base-bash-libs.lock" version)" || return 1
-    framework_commit="$(artifact_metadata_value "$root/base-bash-libs.lock" commit)" || return 1
-    {
-        printf '{\n'
-        printf '  "spdxVersion": "SPDX-2.3",\n'
-        printf '  "dataLicense": "CC0-1.0",\n'
-        printf '  "SPDXID": "SPDXRef-DOCUMENT",\n'
-        printf '  "name": "beacon-v%s-sbom",\n' "$(artifact_json_escape "$version")"
-        printf '  "documentNamespace": "https://github.com/basefoundry/base-bash-libs-demo/releases/v%s/%s",\n' \
-            "$(artifact_json_escape "$version")" "$source_commit"
-        printf '  "creationInfo": {"created": "1970-01-01T00:00:00Z", "creators": ["Tool: base-bash-libs-demo/release-artifact"]},\n'
-        printf '  "packages": [\n'
-        printf '    {"SPDXID": "SPDXRef-Package-Beacon", "name": "beacon", "versionInfo": "%s", "downloadLocation": "https://github.com/basefoundry/base-bash-libs-demo/releases/tag/v%s", "licenseConcluded": "Apache-2.0", "licenseDeclared": "Apache-2.0"},\n' \
-            "$(artifact_json_escape "$version")" "$(artifact_json_escape "$version")"
-        printf '    {"SPDXID": "SPDXRef-Package-BaseBashLibs", "name": "base-bash-libs", "versionInfo": "%s", "downloadLocation": "https://github.com/basefoundry/base-bash-libs/releases/tag/v%s", "licenseConcluded": "Apache-2.0", "licenseDeclared": "Apache-2.0", "externalRefs": [{"referenceCategory": "OTHER", "referenceType": "source-commit", "referenceLocator": "%s"}]}\n' \
-            "$(artifact_json_escape "$framework_version")" "$(artifact_json_escape "$framework_version")" "$framework_commit"
-        printf '  ],\n'
-        printf '  "files": [\n'
-        while IFS= read -r path; do
-            relative="${path#"$root/"}"
-            ((index += 1))
-            if ((first == 0)); then
-                printf ',\n'
-            fi
-            first=0
-            printf '    {"SPDXID": "SPDXRef-File-%s", "fileName": "%s", "checksums": [{"algorithm": "SHA256", "checksumValue": "%s"}], "licenseConcluded": "NOASSERTION"}' \
-                "$index" "$(artifact_json_escape "$relative")" "$(artifact_hash_file "$path")"
-        done < <(find "$root" -type f -print | LC_ALL=C sort)
-        printf '\n  ],\n'
-        printf '  "relationships": [\n'
-        printf '    {"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES", "relatedSpdxElement": "SPDXRef-Package-Beacon"},\n'
-        printf '    {"spdxElementId": "SPDXRef-Package-Beacon", "relationshipType": "DEPENDS_ON", "relatedSpdxElement": "SPDXRef-Package-BaseBashLibs"}\n'
-        printf '  ]\n'
-        printf '}\n'
-    } > "$output"
+    python3 "$artifact_repo_root/scripts/artifact-evidence.py" sbom "$4" "$2" "$3" > "$1"
 }
 
 artifact_write_provenance() {
