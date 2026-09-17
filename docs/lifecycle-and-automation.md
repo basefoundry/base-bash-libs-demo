@@ -65,6 +65,11 @@ atomic directory swap: readers must wait for successful collection before using
 the bundle. Staging may be on another filesystem. As with input checks, concurrent
 mutation inside an owned reservation by another actor is outside the trust model.
 
+Configuration precedence is policy defaults, `--user-config`, `--config`,
+environment, then explicitly supplied CLI options. An explicitly requested user
+file must exist and be readable. The scenario default lives in application policy;
+omitting `--scenario` does not override a configured or environment scenario.
+
 Bundle schema 1 requires README metadata and at least one supported payload.
 The tab-delimited SHA256 manifest lists README.txt followed by selected `files/`
 paths in bytewise lexical order, without duplicates. Verification requires exact
