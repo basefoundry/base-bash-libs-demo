@@ -56,6 +56,15 @@ All fixtures are synthetic; malformed records are treated as data and never
 evaluated as shell code.
 # Filesystem trust boundary
 
+Collection reserves an unused destination with an exclusive directory creation.
+An existing directory, file, or dangling link, including one created while
+collection is staging, causes failure without modifying that destination.
+The owned reservation is populated and verified before success paths are printed;
+failures remove the owned incomplete reservation and staging. This is not an
+atomic directory swap: readers must wait for successful collection before using
+the bundle. Staging may be on another filesystem. As with input checks, concurrent
+mutation inside an owned reservation by another actor is outside the trust model.
+
 Bundle schema 1 requires README metadata and at least one supported payload.
 The tab-delimited SHA256 manifest lists README.txt followed by selected `files/`
 paths in bytewise lexical order, without duplicates. Verification requires exact
