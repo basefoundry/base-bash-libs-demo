@@ -54,3 +54,15 @@ dry-run, non-interactive behavior, cleanup cardinality, status preservation,
 staging removal, and redaction of token-like values and fake sensitive paths.
 All fixtures are synthetic; malformed records are treated as data and never
 evaluated as shell code.
+# Filesystem trust boundary
+
+Workspace and bundle roots must be trusted directories, not symbolic links.
+Selected workspace paths and every bundle entry must contain no symbolic links
+(including dangling links and intermediate directories) or special files.
+Only regular files and directories are supported. Missing optional workspace
+inputs remain supported. Validation happens before selected files are read and
+before a bundle is published or verified.
+
+These portable Bash checks do not provide a sandbox against concurrent changes
+to the filesystem. Keep roots, their ancestors, and their contents under trusted
+ownership and do not mutate them during collection or verification.
