@@ -10,6 +10,52 @@ teardown() {
     rm -rf "$TEST_ROOT"
 }
 
+@test "verification requires complete unique canonical inventory" {
+    "$REPO_ROOT/bin/beacon" collect --quiet --output "$TEST_OUTPUT"
+    cp "$TEST_OUTPUT/MANIFEST.sha256" "$TEST_ROOT/original"
+    for mutation in empty partial duplicate reversed extra malformed missing unreadable; do
+        cp "$TEST_ROOT/original" "$TEST_OUTPUT/MANIFEST.sha256"
+        case "$mutation" in
+            empty) : > "$TEST_OUTPUT/MANIFEST.sha256" ;;
+            partial) head -n 1 "$TEST_ROOT/original" > "$TEST_OUTPUT/MANIFEST.sha256" ;;
+            duplicate) cat "$TEST_ROOT/original" >> "$TEST_OUTPUT/MANIFEST.sha256" ;;
+            reversed) LC_ALL=C sort -r "$TEST_ROOT/original" > "$TEST_OUTPUT/MANIFEST.sha256" ;;
+            extra) printf extra > "$TEST_OUTPUT/extra.txt" ;;
+            malformed) printf 'bad\trecord\n' >> "$TEST_OUTPUT/MANIFEST.sha256" ;;
+            missing) mv "$TEST_OUTPUT/files/system/info.txt" "$TEST_ROOT/info" ;;
+            unreadable) chmod 000 "$TEST_OUTPUT/files/logs/app.log" ;;
+        esac
+        run "$REPO_ROOT/bin/beacon" verify --output "$TEST_OUTPUT"
+        if [[ "$mutation" != unreadable || "$(id -u)" != 0 ]]; then
+            [ "$status" -eq 1 ]
+            [[ "$output" != *verified=true* ]]
+            [ -n "$output" ]
+        fi
+        case "$mutation" in
+            extra) rm "$TEST_OUTPUT/extra.txt" ;;
+            missing) mv "$TEST_ROOT/info" "$TEST_OUTPUT/files/system/info.txt" ;;
+            unreadable) chmod 644 "$TEST_OUTPUT/files/logs/app.log" ;;
+        esac
+    done
+}
+
+@test "verification accepts partial workspaces but rejects coherent invalid metadata" {
+    mkdir -p "$TEST_ROOT/partial/system"
+    printf 'synthetic\n' > "$TEST_ROOT/partial/system/info.txt"
+    "$REPO_ROOT/bin/beacon" collect --workspace "$TEST_ROOT/partial" --output "$TEST_OUTPUT"
+    run "$REPO_ROOT/bin/beacon" verify --workspace "$TEST_ROOT/partial" --output "$TEST_OUTPUT"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *files=2* ]]
+    printf 'selected_files=1\n' >> "$TEST_OUTPUT/README.txt"
+    hash="$(shasum -a 256 "$TEST_OUTPUT/README.txt")"
+    tail -n 1 "$TEST_OUTPUT/MANIFEST.sha256" > "$TEST_ROOT/last"
+    printf '%s\tREADME.txt\n' "${hash%% *}" > "$TEST_OUTPUT/MANIFEST.sha256"
+    cat "$TEST_ROOT/last" >> "$TEST_OUTPUT/MANIFEST.sha256"
+    run "$REPO_ROOT/bin/beacon" verify --workspace "$TEST_ROOT/partial" --output "$TEST_OUTPUT"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *metadata* ]]
+}
+
 @test "selection rejects linked files, linked parents and special files" {
     mkdir -p "$TEST_ROOT/workspace/config" "$TEST_ROOT/outside"
     printf 'synthetic-marker\n' > "$TEST_ROOT/outside/app.env"

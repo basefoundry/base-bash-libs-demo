@@ -277,6 +277,7 @@ beacon_collect() {
     base_file_update_file_section "$readme" \
         '# BEGIN BEACON REPORT' '# END BEACON REPORT' \
         'application=beacon' \
+        'schema_version=1' \
         "consumer_branch=$branch" \
         "framework_version=$BASE_BASH_LIBS_VERSION" \
         "framework_commit=$BASE_BASH_LIBS_COMMIT" \
@@ -297,8 +298,10 @@ beacon_collect() {
 }
 
 beacon_verify() {
-    local workspace="$1" output="$2" expected relative actual secret
-    local verified=0
+    local workspace="$1" output="$2" expected relative actual secret record path listing line
+    local verified=0 inventory=0 previous="" selected="" schema="" application=""
+    local LC_ALL=C
+    local -A records=() metadata=()
 
     beacon_check_bundle_tree "$output" || return 1
 
@@ -306,20 +309,73 @@ beacon_verify() {
         beacon_error "Bundle '$output' does not exist."
         return $?
     }
-    [[ -f "$output/MANIFEST.sha256" ]] || {
-        beacon_error "Bundle manifest is missing."
+    [[ -f "$output/MANIFEST.sha256" && -r "$output/MANIFEST.sha256" ]] || {
+        beacon_error "Bundle manifest is missing or unreadable."
         return $?
     }
 
-    while IFS=$'\t' read -r expected relative || [[ -n "$expected$relative" ]]; do
-        [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || return 1
-        [[ -n "$relative" && "$relative" != /* && "$relative" != *../* ]] || return 1
+    while IFS= read -r record || [[ -n "$record" ]]; do
+        expected="${record%%$'\t'*}"
+        relative="${record#*$'\t'}"
+        if [[ ! "$expected" =~ ^[0-9a-f]{64}$ || "$record" != "$expected"$'\t'"$relative" ]]; then
+            beacon_error "Malformed manifest record."; return 1
+        fi
+        case "$relative" in
+            README.txt|files/config/app.env|files/logs/app.log|files/system/info.txt) ;;
+            *) beacon_error "Unexpected manifest path."; return 1 ;;
+        esac
+        [[ -z "$previous" || "$relative" > "$previous" ]] || {
+            beacon_error "Manifest records must be unique and canonically ordered."; return 1;
+        }
+        previous="$relative"
         beacon_check_path "$output" "$relative" || return 1
-        [[ -f "$output/$relative" ]] || return 1
-        beacon_sha256 "$output/$relative" actual || return $?
-        [[ "$actual" == "$expected" ]] || return 1
+        [[ -f "$output/$relative" && -r "$output/$relative" ]] || {
+            beacon_error "Manifest payload is missing or unreadable."; return 1;
+        }
+        beacon_sha256 "$output/$relative" actual || {
+            beacon_error "Cannot read manifest payload."; return 1;
+        }
+        [[ "$actual" == "$expected" ]] || {
+            beacon_error "Manifest checksum mismatch."; return 1;
+        }
+        records["$relative"]=1
         verified=$((verified + 1))
     done < "$output/MANIFEST.sha256"
+
+    [[ "$verified" -ge 2 && -n "${records[README.txt]-}" ]] || {
+        beacon_error "Manifest requires metadata and at least one payload."; return 1;
+    }
+    base_std_make_temp_file listing beacon-inventory || return 1
+    find "$output" -type f -print0 > "$listing" || return 1
+    while IFS= read -r -d '' path; do
+        relative="${path#"$output"/}"
+        [[ "$relative" == MANIFEST.sha256 ]] && continue
+        [[ -n "${records[$relative]-}" ]] || {
+            beacon_error "Bundle contains an unlisted payload."; return 1;
+        }
+        inventory=$((inventory + 1))
+    done < "$listing"
+    [[ "$inventory" -eq "$verified" ]] || {
+        beacon_error "Bundle inventory differs from manifest."; return 1;
+    }
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        case "$line" in
+            application=*|schema_version=*|selected_files=*)
+                [[ -z "${metadata[${line%%=*}]-}" ]] || {
+                    beacon_error "Duplicate bundle metadata."; return 1;
+                }
+                metadata["${line%%=*}"]=1
+                ;;
+        esac
+        case "$line" in
+            application=*) application+="${line#*=}" ;;
+            schema_version=*) schema+="${line#*=}" ;;
+            selected_files=*) selected+="${line#*=}" ;;
+        esac
+    done < "$output/README.txt"
+    [[ "$application" == beacon && "$schema" == 1 && "$selected" == "$((verified - 1))" ]] || {
+        beacon_error "Bundle metadata schema or selected-file count is invalid."; return 1;
+    }
 
     beacon_load_secret_values "$workspace" || return $?
     for secret in "${BEACON_UNIQUE_SECRET_VALUES[@]}"; do

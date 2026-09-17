@@ -56,6 +56,14 @@ All fixtures are synthetic; malformed records are treated as data and never
 evaluated as shell code.
 # Filesystem trust boundary
 
+Bundle schema 1 requires README metadata and at least one supported payload.
+The tab-delimited SHA256 manifest lists README.txt followed by selected `files/`
+paths in bytewise lexical order, without duplicates. Verification requires exact
+regular-file inventory coverage, schema_version=1, application=beacon, and a
+selected_files count matching the payload. Partial input workspaces are valid;
+empty, incomplete, extra-file, or malformed bundles return status 1 without a
+`verified=true` result. Older bundles without schema metadata must be recollected.
+
 Workspace and bundle roots must be trusted directories, not symbolic links.
 Selected workspace paths and every bundle entry must contain no symbolic links
 (including dangling links and intermediate directories) or special files.

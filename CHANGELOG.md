@@ -9,6 +9,8 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ### Fixed
 
+- Require complete, unique bundle manifests and coherent schema/count metadata.
+
 - Reject links and special files in selected inputs and verified bundles.
 
 ### Added
