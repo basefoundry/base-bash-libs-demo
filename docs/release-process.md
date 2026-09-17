@@ -22,6 +22,13 @@ diff -r /tmp/beacon-release-a /tmp/beacon-release-b
 
 The directory contains:
 
+Timestamps are fixed at 1980-01-01 00:00:00 UTC regardless of the caller's
+timezone. CI compares the complete four-asset set built under UTC and
+Asia/Kolkata. Filename ordering uses `LC_ALL=C`; payload filenames are
+repository-controlled. Reproducibility is checked within each supported toolchain
+(GNU tar on Ubuntu, BSD tar on macOS), not promised byte-for-byte across different
+tar implementations or versions. Existing published assets are never replaced.
+
 - `beacon-vX.Y.Z.tar.gz`, the standalone Beacon application, fixtures, and
   verified vendored Base Bash package;
 - `beacon-vX.Y.Z.SHA256SUMS`, covering the archive and both JSON documents;

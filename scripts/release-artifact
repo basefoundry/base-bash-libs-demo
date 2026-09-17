@@ -173,10 +173,10 @@ artifact_normalize_tree() {
     local root="$1" path
 
     while IFS= read -r path; do
-        touch -t 198001010000 "$path" || return 1
+        TZ=UTC touch -t 198001010000 "$path" || return 1
     done < <(find "$root" -type f -print)
     while IFS= read -r path; do
-        touch -t 198001010000 "$path" || return 1
+        TZ=UTC touch -t 198001010000 "$path" || return 1
     done < <(find "$root" -type d -print)
 }
 

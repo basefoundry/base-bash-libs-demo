@@ -11,6 +11,7 @@ and versions are tracked in the repo-root `VERSION` file.
 
 - Reserve bundle destinations exclusively to prevent concurrent publication nesting.
 - Honor user configuration and scenario precedence without implicit CLI overrides.
+- Normalize release timestamps in UTC and test cross-timezone reproducibility.
 
 - Require complete, unique bundle manifests and coherent schema/count metadata.
 

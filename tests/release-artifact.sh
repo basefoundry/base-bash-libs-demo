@@ -14,9 +14,9 @@ release_test_cleanup() {
 }
 trap release_test_cleanup EXIT
 
-"$release_test_root/scripts/release-artifact" build \
+TZ=UTC "$release_test_root/scripts/release-artifact" build \
     --version "$release_test_version" --output "$release_test_first"
-"$release_test_root/scripts/release-artifact" build \
+TZ=Asia/Kolkata "$release_test_root/scripts/release-artifact" build \
     --version "$release_test_version" --output "$release_test_second"
 
 diff -r "$release_test_first" "$release_test_second"
