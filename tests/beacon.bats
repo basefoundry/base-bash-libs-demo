@@ -10,6 +10,37 @@ teardown() {
     rm -rf "$TEST_ROOT"
 }
 
+@test "user configuration is honored and an explicit missing file fails" {
+    printf 'workspace=%s/missing\n' "$TEST_ROOT" > "$TEST_ROOT/user.conf"
+    run "$REPO_ROOT/bin/beacon" plan --user-config "$TEST_ROOT/user.conf"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *Workspace* ]]
+    run "$REPO_ROOT/bin/beacon" plan --user-config "$TEST_ROOT/missing.conf"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *configuration* ]]
+}
+
+@test "scenario precedence is default then user then project then environment then CLI" {
+    printf 'scenario=failure\n' > "$TEST_ROOT/user.conf"
+    printf 'scenario=normal\n' > "$TEST_ROOT/project.conf"
+    run "$REPO_ROOT/bin/beacon" collect --output "$TEST_ROOT/default"
+    [ "$status" -eq 0 ]
+    run "$REPO_ROOT/bin/beacon" collect --user-config "$TEST_ROOT/user.conf" --output "$TEST_ROOT/user"
+    [ "$status" -eq 70 ]
+    [ ! -e "$TEST_ROOT/user" ]
+    run "$REPO_ROOT/bin/beacon" collect --user-config "$TEST_ROOT/user.conf" --config "$TEST_ROOT/project.conf" --output "$TEST_ROOT/project"
+    [ "$status" -eq 0 ]
+    run env BEACON_SCENARIO=failure "$REPO_ROOT/bin/beacon" collect --user-config "$TEST_ROOT/user.conf" --config "$TEST_ROOT/project.conf" --output "$TEST_ROOT/environment"
+    [ "$status" -eq 70 ]
+    [ ! -e "$TEST_ROOT/environment" ]
+    run env BEACON_SCENARIO=failure "$REPO_ROOT/bin/beacon" collect --user-config "$TEST_ROOT/user.conf" --config "$TEST_ROOT/project.conf" --scenario normal --output "$TEST_ROOT/cli"
+    [ "$status" -eq 0 ]
+    printf 'scenario=failure\n' > "$TEST_ROOT/project.conf"
+    run "$REPO_ROOT/bin/beacon" collect --config "$TEST_ROOT/project.conf" --output "$TEST_ROOT/project-failure"
+    [ "$status" -eq 70 ]
+    [ ! -e "$TEST_ROOT/project-failure" ]
+}
+
 @test "verification requires complete unique canonical inventory" {
     "$REPO_ROOT/bin/beacon" collect --quiet --output "$TEST_OUTPUT"
     cp "$TEST_OUTPUT/MANIFEST.sha256" "$TEST_ROOT/original"

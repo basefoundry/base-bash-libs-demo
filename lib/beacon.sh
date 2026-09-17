@@ -22,7 +22,7 @@ base_cli_option beacon "" output value --output \
 base_cli_option beacon "" lifecycle_log value --lifecycle-log \
     help="Append one machine-readable cleanup event" metavar=PATH
 base_cli_option beacon collect scenario value --scenario \
-    default=normal enum=normal,failure,interrupt \
+    enum=normal,failure,interrupt \
     help="Deterministic collection scenario" metavar=NAME
 base_app_add_standard_options beacon ""
 
@@ -429,7 +429,12 @@ beacon_execute() {
         base_app_config_set_cli beacon_policy scenario "$cli_value" || return $?
     fi
     base_cli_result_get config config_file 2>/dev/null && config_args+=(--project "$config_file")
-    base_cli_result_get user-config user_config 2>/dev/null && config_args+=(--user "$user_config")
+    if base_cli_result_get user_config user_config 2>/dev/null; then
+        [[ -f "$user_config" && -r "$user_config" ]] || {
+            beacon_error "Requested user configuration is missing or unreadable."; return 1;
+        }
+        config_args+=(--user "$user_config")
+    fi
     base_app_config_load beacon_policy "${config_args[@]}" || return $?
     base_app_config_get beacon_policy workspace workspace || return $?
     base_app_config_get beacon_policy output output || return $?
