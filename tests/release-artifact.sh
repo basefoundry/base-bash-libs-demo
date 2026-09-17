@@ -23,6 +23,8 @@ diff -r "$release_test_first" "$release_test_second"
 "${SPDX_VALIDATOR_PYTHON:-python3}" "$release_test_root/tests/validate-spdx.py" \
     "$release_test_first/beacon-v$release_test_version.spdx.json"
 "$release_test_root/scripts/release-artifact" verify "$release_test_first"
+"$release_test_root/scripts/release-artifact" verify "$release_test_first" --trusted-smoke
+python3 "$release_test_root/tests/artifact-evidence.py" "$release_test_first"
 
 if "$release_test_root/scripts/release-artifact" build \
     --version "$release_test_version" --output "$release_test_first" > /dev/null 2>&1; then

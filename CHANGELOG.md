@@ -9,6 +9,9 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ### Fixed
 
+- Bind release evidence to exact archive contents and identities; validate archive
+  entries before extraction and require explicit trust before executing smoke tests.
+
 - Emit independently validated SPDX 2.3 file and package evidence with SHA1 and SHA256.
 
 - Reserve bundle destinations exclusively to prevent concurrent publication nesting.

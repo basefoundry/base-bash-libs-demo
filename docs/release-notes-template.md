@@ -25,6 +25,9 @@ cloud credentials, or runtime network access.
 Download all four assets into one directory, then run the matching source
 checkout's `scripts/release-artifact verify DIRECTORY`. Confirm that the
 reported Beacon and Base Bash versions match this release before execution.
+Default verification checks structure and evidence without executing payload code;
+it is not an authenticity signature. After independently trusting the release,
+add `--trusted-smoke` to execute its standalone application checks.
 
 ## Upgrade and rollback
 

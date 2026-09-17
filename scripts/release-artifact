@@ -12,7 +12,7 @@ artifact_usage() {
     printf '%s\n' \
         'Usage:' \
         '  scripts/release-artifact build --version VERSION --output DIRECTORY' \
-        '  scripts/release-artifact verify DIRECTORY' \
+        '  scripts/release-artifact verify DIRECTORY [--trusted-smoke]' \
         '' \
         'Build creates, but never publishes:' \
         '  beacon-vVERSION.tar.gz' \
@@ -347,144 +347,34 @@ artifact_build() {
     printf 'Created Beacon release artifact set: %s\n' "$output"
 }
 
-artifact_verify_checksums() {
-    local output="$1" archive_name="$2" sbom_name="$3" provenance_name="$4" sums="$5"
-    local line expected name actual line_number=0 checksum_pattern
-    local -a required=("$archive_name" "$sbom_name" "$provenance_name")
-    local -A seen=()
-
-    checksum_pattern='^([0-9a-f]{64})  ([^[:space:]/]+)$'
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        line_number=$((line_number + 1))
-        [[ "$line" =~ $checksum_pattern ]] || {
-            artifact_error "Malformed checksum entry at line $line_number."
-            return 1
-        }
-        expected="${BASH_REMATCH[1]}"
-        name="${BASH_REMATCH[2]}"
-        case "$name" in
-        "$archive_name" | "$sbom_name" | "$provenance_name") ;;
-        *)
-            artifact_error "Unexpected checksum asset: $name"
-            return 1
-            ;;
-        esac
-        [[ -z "${seen[$name]+set}" ]] || {
-            artifact_error "Duplicate checksum asset: $name"
-            return 1
-        }
-        [[ -f "$output/$name" && ! -L "$output/$name" ]] || return 1
-        actual="$(artifact_hash_file "$output/$name")" || return 1
-        [[ "$actual" == "$expected" ]] || {
-            artifact_error "Checksum verification failed for $name"
-            return 1
-        }
-        seen["$name"]=1
-    done < "$sums"
-
-    [[ "$line_number" -eq 3 ]] || return 1
-    for name in "${required[@]}"; do
-        [[ -n "${seen[$name]+set}" ]] || return 1
-    done
-}
 
 artifact_verify() {
-    local output="${1-}" archive sbom provenance sums archive_name version root_name
-    local sbom_name provenance_name sums_name temporary payload_root entry
-    local source_version source_commit framework_version framework_commit archive_sha status_output
-    local -a archives=() sboms=() provenances=() sums_files=()
-
-    [[ -d "$output" ]] || {
-        artifact_error "Artifact directory does not exist: $output"
-        return 2
-    }
+    local output="${1-}" smoke="${2-}" temporary payload_root version framework_version framework_commit status_output
+    local -a roots=()
+    [[ -d "$output" ]] || { artifact_error 'Artifact directory does not exist.'; return 2; }
     output="$(cd -- "$output" && pwd -P)" || return 2
-    mapfile -t archives < <(find "$output" -maxdepth 1 -type f -name 'beacon-v*.tar.gz' -print)
-    mapfile -t sboms < <(find "$output" -maxdepth 1 -type f -name 'beacon-v*.spdx.json' -print)
-    mapfile -t provenances < <(find "$output" -maxdepth 1 -type f -name 'beacon-v*.provenance.json' -print)
-    mapfile -t sums_files < <(find "$output" -maxdepth 1 -type f -name 'beacon-v*.SHA256SUMS' -print)
-    if ((${#archives[@]} != 1 || ${#sboms[@]} != 1 || ${#provenances[@]} != 1 || ${#sums_files[@]} != 1)); then
-        artifact_error 'Artifact directory must contain exactly one archive, SBOM, provenance, and checksum manifest.'
-        return 1
-    fi
-
-    archive="${archives[0]}"
-    sbom="${sboms[0]}"
-    provenance="${provenances[0]}"
-    sums="${sums_files[0]}"
-    archive_name="${archive##*/}"
-    version="${archive_name#beacon-v}"
-    version="${version%.tar.gz}"
-    artifact_version_supported "$version" || return 1
-    root_name="beacon-v$version"
-    sbom_name="$root_name.spdx.json"
-    provenance_name="$root_name.provenance.json"
-    sums_name="$root_name.SHA256SUMS"
-    [[ "${sbom##*/}" == "$sbom_name" && "${provenance##*/}" == "$provenance_name" && "${sums##*/}" == "$sums_name" ]] || {
-        artifact_error 'Release asset filenames do not identify one version.'
-        return 1
-    }
-
-    artifact_verify_checksums "$output" "$archive_name" "$sbom_name" "$provenance_name" "$sums" || return $?
-    command -v python3 > /dev/null 2>&1 || {
-        artifact_error 'python3 is required to validate JSON evidence.'
-        return 1
-    }
-    python3 -m json.tool "$sbom" > /dev/null || return 1
-    python3 -m json.tool "$provenance" > /dev/null || return 1
-    archive_sha="$(artifact_hash_file "$archive")" || return 1
-
-    grep -Fq "\"name\": \"$archive_name\"" "$provenance" || return 1
-    grep -Fq "\"sha256\": \"$archive_sha\"" "$provenance" || return 1
-    grep -Fq '"reproducible": true' "$provenance" || return 1
-
-    while IFS= read -r entry; do
-        [[ "$entry" == "$root_name/"* && "$entry" != /* && "$entry" != *'/../'* && "$entry" != ../* ]] || {
-            artifact_error "Unsafe or unexpected archive entry: $entry"
-            return 1
-        }
-    done < <(tar -tzf "$archive")
-
     (
         temporary="$(mktemp -d "${TMPDIR:-/tmp}/beacon-artifact-verify.XXXXXX")" || exit 1
         trap 'rm -rf -- "$temporary"' EXIT
-        tar -xzf "$archive" -C "$temporary" || exit 1
-        payload_root="$temporary/$root_name"
-        [[ -d "$payload_root" && -z "$(find "$payload_root" -type l -print -quit)" ]] || exit 1
-        for entry in BEACON.release VERSION LICENSE README.md base-bash-libs.lock bin/beacon lib/beacon.sh scripts/release-artifact scripts/verify-vendor; do
-            [[ -f "$payload_root/$entry" ]] || exit 1
-        done
-
-        source_version="$(artifact_metadata_value "$payload_root/BEACON.release" version)" || exit 1
-        source_commit="$(artifact_metadata_value "$payload_root/BEACON.release" commit)" || exit 1
+        python3 "$artifact_repo_root/scripts/artifact-evidence.py" verify "$output" "$temporary" || exit 1
+        roots=("$temporary"/beacon-v*)
+        payload_root="${roots[0]}"
+        version="$(artifact_metadata_value "$payload_root/BEACON.release" version)" || exit 1
         framework_version="$(artifact_metadata_value "$payload_root/BEACON.release" framework_version)" || exit 1
         framework_commit="$(artifact_metadata_value "$payload_root/BEACON.release" framework_commit)" || exit 1
-        [[ "$source_version" == "$version" && "$(sed -n '1p' "$payload_root/VERSION")" == "$version" ]] || exit 1
-        artifact_commit_is_full_sha "$source_commit" || exit 1
-        artifact_commit_is_full_sha "$framework_commit" || exit 1
-        [[ "$framework_version" == "$(artifact_metadata_value "$payload_root/base-bash-libs.lock" version)" ]] || exit 1
-        [[ "$framework_commit" == "$(artifact_metadata_value "$payload_root/base-bash-libs.lock" commit)" ]] || exit 1
-        grep -Fq "\"sourceCommit\": \"$source_commit\"" "$provenance" || exit 1
-        grep -Fq "\"frameworkVersion\": \"$framework_version\"" "$provenance" || exit 1
-        grep -Fq "\"frameworkCommit\": \"$framework_commit\"" "$provenance" || exit 1
-        grep -Fq "\"versionInfo\": \"$version\"" "$sbom" || exit 1
-        grep -Fq "\"versionInfo\": \"$framework_version\"" "$sbom" || exit 1
-        if grep -R -F -- "$artifact_repo_root" "$payload_root" > /dev/null; then
-            artifact_error 'Standalone payload contains an absolute source-checkout path.'
-            exit 1
+        if [[ "$smoke" == --trusted-smoke ]]; then
+            "$payload_root/scripts/verify-vendor" > /dev/null || exit 1
+            status_output="$("$payload_root/bin/beacon" status)" || exit 1
+            grep -Fqx "framework_version=$framework_version" <<< "$status_output" || exit 1
+            grep -Fqx "framework_commit=$framework_commit" <<< "$status_output" || exit 1
+            "$payload_root/bin/beacon" collect --dry-run --non-interactive \
+                --output "$temporary/dry-run-bundle" > /dev/null || exit 1
+            [[ ! -e "$temporary/dry-run-bundle" ]] || exit 1
+            "$payload_root/bin/beacon" collect --quiet --output "$temporary/bundle" > /dev/null || exit 1
+            "$payload_root/bin/beacon" verify --quiet --output "$temporary/bundle" > /dev/null || exit 1
+            printf 'Trusted artifact smoke passed.\n'
         fi
-
-        "$payload_root/scripts/verify-vendor" > /dev/null || exit 1
-        status_output="$("$payload_root/bin/beacon" status)" || exit 1
-        grep -Fq "framework_version=$framework_version" <<< "$status_output" || exit 1
-        grep -Fq "framework_commit=$framework_commit" <<< "$status_output" || exit 1
-        "$payload_root/bin/beacon" collect --dry-run --non-interactive \
-            --output "$temporary/dry-run-bundle" > /dev/null || exit 1
-        [[ ! -e "$temporary/dry-run-bundle" ]] || exit 1
-        "$payload_root/bin/beacon" collect --quiet --output "$temporary/bundle" > /dev/null || exit 1
-        "$payload_root/bin/beacon" verify --quiet --output "$temporary/bundle" > /dev/null || exit 1
-
-        printf 'Verified Beacon %s artifact with Base Bash %s.\n' "$version" "$framework_version"
+        printf 'Verified Beacon %s artifact with Base Bash %s (structural).\n' "$version" "$framework_version"
     )
 }
 
@@ -497,11 +387,11 @@ artifact_main() {
         artifact_build "$@"
         ;;
     verify)
-        (($# == 2)) || {
+        [[ $# == 2 || ( $# == 3 && "$3" == --trusted-smoke ) ]] || {
             artifact_usage
             return 2
         }
-        artifact_verify "$2"
+        artifact_verify "$2" "${3-}"
         ;;
     -h | --help | help | '')
         artifact_usage
