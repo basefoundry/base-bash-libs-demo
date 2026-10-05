@@ -9,6 +9,9 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ### Fixed
 
+- Require the committed Base Bash vendor manifest to exactly match a regular,
+  link-free payload inventory before verifying checksums.
+
 - Bind release evidence to exact archive contents and identities; validate archive
   entries before extraction and require explicit trust before executing smoke tests.
 

@@ -27,6 +27,7 @@ required_files=(
     tests/bash-42-smoke.sh
     tests/candidate-smoke.sh
     tests/candidate.bats
+    tests/vendor.bats
     tests/docs-examples.sh
     tests/docs-contracts.sh
     tests/minimal-consumer.sh
@@ -74,7 +75,7 @@ command -v bats > /dev/null 2>&1 || {
     printf 'bats is required.\n' >&2
     exit 1
 }
-bats tests/beacon.bats tests/lifecycle.bats tests/candidate.bats || exit $?
+bats tests/beacon.bats tests/lifecycle.bats tests/candidate.bats tests/vendor.bats || exit $?
 
 ./tests/bash-42-smoke.sh || exit $?
 ./tests/candidate-smoke.sh "$PWD/vendor/base-bash-libs" || exit $?
