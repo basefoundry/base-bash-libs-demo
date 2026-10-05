@@ -5,6 +5,7 @@ project:
 
 test:
   command: ./tests/validate.sh
+  requirements: tests/requirements-artifacts.txt
 
 release:
   version_file: VERSION

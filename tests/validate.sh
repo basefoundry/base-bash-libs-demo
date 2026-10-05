@@ -58,6 +58,14 @@ for executable in bin/beacon examples/minimal-cli scripts/release-artifact scrip
     }
 done
 
+validate_spdx_python="${SPDX_VALIDATOR_PYTHON:-python3}"
+if ! "$validate_spdx_python" -c 'import spdx_tools' > /dev/null 2>&1; then
+    printf 'The pinned SPDX validator is unavailable through %s. Run "basectl setup base-bash-libs-demo" or set SPDX_VALIDATOR_PYTHON to the prepared interpreter.\n' \
+        "$validate_spdx_python" >&2
+    exit 1
+fi
+export SPDX_VALIDATOR_PYTHON="$validate_spdx_python"
+
 ./scripts/verify-vendor || exit $?
 
 command -v shellcheck > /dev/null 2>&1 || {
