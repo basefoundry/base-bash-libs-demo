@@ -20,6 +20,71 @@ verify_manifest_digest="$(sed -n 's/^manifest_sha256=//p' "$verify_lock")"
 [[ -n "$verify_version" && -n "$verify_commit" && -n "$verify_asset_digest" && -n "$verify_manifest_digest" ]] || \
     verify_fail "lock file is incomplete"
 
+verify_inventory_tmp="$(mktemp -d "${TMPDIR:-/tmp}/base-bash-libs-vendor.XXXXXX")" || \
+    verify_fail "unable to create vendor verification workspace"
+verify_inventory_cleanup() {
+    rm -rf -- "$verify_inventory_tmp"
+}
+trap verify_inventory_cleanup EXIT
+
+verify_validate_manifest_path() {
+    local verify_path="$1" verify_part
+    [[ -n "$verify_path" && "$verify_path" != /* ]] || \
+        verify_fail "manifest path is not relative: $verify_path"
+    [[ "$verify_path" != */ ]] || \
+        verify_fail "manifest path is not canonical: $verify_path"
+    [[ "$verify_path" != *[[:cntrl:]]* ]] || \
+        verify_fail "manifest path contains a control character: $verify_path"
+    IFS='/' read -r -a verify_path_parts <<< "$verify_path"
+    for verify_part in "${verify_path_parts[@]}"; do
+        [[ -n "$verify_part" && "$verify_part" != . && "$verify_part" != .. ]] || \
+            verify_fail "manifest path is not canonical: $verify_path"
+    done
+}
+
+verify_manifest_names="$verify_inventory_tmp/manifest.names"
+while IFS= read -r verify_manifest_line || [[ -n "$verify_manifest_line" ]]; do
+    [[ "$verify_manifest_line" =~ ^[0-9a-f]{64}[[:space:]][[:space:]](.+)$ ]] || \
+        verify_fail "malformed vendor manifest record"
+    verify_manifest_name="${BASH_REMATCH[1]}"
+    verify_validate_manifest_path "$verify_manifest_name"
+    case "$verify_manifest_name" in
+        MANIFEST.sha256|BUNDLE.release)
+            verify_fail "vendor identity file must not be listed in its manifest: $verify_manifest_name"
+            ;;
+    esac
+    printf '%s\n' "$verify_manifest_name" >> "$verify_manifest_names"
+done < "$verify_vendor/MANIFEST.sha256"
+[[ -s "$verify_manifest_names" ]] || verify_fail "vendor manifest inventory is empty"
+[[ -z "$(LC_ALL=C sort "$verify_manifest_names" | uniq -d | sed -n '1p')" ]] || \
+    verify_fail "vendor manifest contains duplicate paths"
+
+verify_actual_names="$verify_inventory_tmp/actual.names"
+while IFS= read -r -d '' verify_actual_path; do
+    verify_actual_name="${verify_actual_path#"$verify_vendor"/}"
+    if [[ -L "$verify_actual_path" ]]; then
+        verify_fail "vendor tree contains a symbolic link: $verify_actual_name"
+    fi
+    if [[ -d "$verify_actual_path" ]]; then
+        continue
+    fi
+    [[ -f "$verify_actual_path" ]] || verify_fail "vendor tree contains a special file: $verify_actual_name"
+    case "$verify_actual_name" in
+        MANIFEST.sha256|BUNDLE.release)
+            ;;
+        *)
+            verify_validate_manifest_path "$verify_actual_name"
+            printf '%s\n' "$verify_actual_name" >> "$verify_actual_names"
+            ;;
+    esac
+done < <(find -P "$verify_vendor" -mindepth 1 -print0)
+
+[[ -s "$verify_actual_names" ]] || verify_fail "vendor payload inventory is empty"
+LC_ALL=C sort "$verify_manifest_names" > "$verify_inventory_tmp/manifest.sorted"
+LC_ALL=C sort "$verify_actual_names" > "$verify_inventory_tmp/actual.sorted"
+cmp -s "$verify_inventory_tmp/manifest.sorted" "$verify_inventory_tmp/actual.sorted" || \
+    verify_fail "vendor manifest does not exactly match the regular-file inventory"
+
 if command -v sha256sum >/dev/null 2>&1; then
     verify_actual_manifest="$(sha256sum "$verify_vendor/MANIFEST.sha256")"
     verify_actual_manifest="${verify_actual_manifest%% *}"

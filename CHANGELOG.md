@@ -9,6 +9,9 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ### Fixed
 
+- Require the committed Base Bash vendor manifest to exactly match a regular,
+  link-free payload inventory before verifying checksums.
+
 - Declare and preflight the pinned SPDX artifact-test dependency so the normal
   Base setup and test path fails early with actionable guidance when it is
   unavailable.
