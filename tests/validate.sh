@@ -62,7 +62,15 @@ artifact_requirements_input=tests/requirements-artifacts.in
 artifact_requirements_lock=tests/requirements-artifacts.txt
 while IFS= read -r requirement || [[ -n "$requirement" ]]; do
     [[ -z "$requirement" || "$requirement" == \#* ]] && continue
-    if ! awk -v requirement="$requirement" 'index($0, requirement) == 1 { found = 1 } END { exit !found }' "$artifact_requirements_lock"; then
+    if ! awk -v requirement="$requirement" '
+        index($0, requirement) == 1 {
+            suffix = substr($0, length(requirement) + 1)
+            if (suffix == "" || suffix ~ /^[[:space:]]+\\$/) {
+                found = 1
+            }
+        }
+        END { exit !found }
+    ' "$artifact_requirements_lock"; then
         printf 'Artifact lock is missing direct requirement: %s\n' "$requirement" >&2
         exit 1
     fi
