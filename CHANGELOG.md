@@ -13,6 +13,9 @@ and versions are tracked in the repo-root `VERSION` file.
   Base setup and test path fails early with actionable guidance when it is
   unavailable.
 
+- Resolve compatibility release tags through the explicit tag namespace and
+  test the resulting immutable commit instead of trusting version-shaped refs.
+
 - Bind release evidence to exact archive contents and identities; validate archive
   entries before extraction and require explicit trust before executing smoke tests.
 

@@ -31,27 +31,21 @@ jobs:
           - ubuntu-24.04
           - macos-14
     steps:
-      - name: Reject moving references
-        env:
-          FRAMEWORK_REF: ${{ matrix.framework_ref }}
-        run: |
-          case "$FRAMEWORK_REF" in
-            main|master|HEAD|refs/heads/*)
-              printf 'Moving framework ref is not allowed: %s\n' "$FRAMEWORK_REF" >&2
-              exit 1
-              ;;
-          esac
-          if [[ "$FRAMEWORK_REF" != v[0-9]* && ! "$FRAMEWORK_REF" =~ ^[0-9a-f]{40}$ ]]; then
-            printf 'Expected a release tag or full commit: %s\n' "$FRAMEWORK_REF" >&2
-            exit 1
-          fi
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+      - name: Resolve immutable framework reference
+        id: resolve
+        env:
+          FRAMEWORK_REF: ${{ matrix.framework_ref }}
+          FRAMEWORK_REPOSITORY: https://github.com/basefoundry/base-bash-libs.git
+        run: |
+          resolved_commit="$(./scripts/resolve-framework-ref "$FRAMEWORK_REPOSITORY" "$FRAMEWORK_REF")"
+          printf 'commit=%s\n' "$resolved_commit" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           repository: basefoundry/base-bash-libs
-          ref: ${{ matrix.framework_ref }}
+          ref: ${{ steps.resolve.outputs.commit }}
           path: .framework-candidate
           persist-credentials: false
       - name: Install supported Bash on macOS
@@ -60,14 +54,15 @@ jobs:
       - name: Exercise the candidate through Beacon
         env:
           EXPECTED_REF: ${{ matrix.framework_ref }}
+          EXPECTED_COMMIT: ${{ steps.resolve.outputs.commit }}
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             export PATH="$(brew --prefix)/bin:$PATH"
           fi
           candidate_commit="$(git -C .framework-candidate rev-parse --verify 'HEAD^{commit}')"
-          if [[ "$EXPECTED_REF" =~ ^[0-9a-f]{40}$ && "$candidate_commit" != "$EXPECTED_REF" ]]; then
-            printf 'Resolved commit %s does not match requested commit %s.\n' \
-              "$candidate_commit" "$EXPECTED_REF" >&2
+          if [[ "$candidate_commit" != "$EXPECTED_COMMIT" ]]; then
+            printf 'Resolved commit %s does not match expected commit %s for %s.\n' \
+              "$candidate_commit" "$EXPECTED_COMMIT" "$EXPECTED_REF" >&2
             exit 1
           fi
           ./tests/candidate-smoke.sh "$PWD/.framework-candidate" "" "$candidate_commit"
