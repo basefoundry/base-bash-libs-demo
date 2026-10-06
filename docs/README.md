@@ -26,6 +26,8 @@ Choose the shortest path that answers your current question.
    and the separately authorized publication sequence.
 8. [Project workflow](project-workflow.md) explains issue status and pull-request
    linkage for ordinary and stacked PRs.
+9. [Required CI checks](ci-required-checks.md) defines the aggregate validation
+   contract used before merging changes to `main`.
 
 Maintainers preparing a release should also use the
 [release-notes template](release-notes-template.md). Framework reference and
