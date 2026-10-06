@@ -25,7 +25,7 @@ jobs:
       - name: Validate consumer
         run: |
           python3 -m venv "$RUNNER_TEMP/spdx"
-          "$RUNNER_TEMP/spdx/bin/pip" install -r tests/requirements-artifacts.txt
+          "$RUNNER_TEMP/spdx/bin/pip" install --require-hashes -r tests/requirements-artifacts.txt
           export SPDX_VALIDATOR_PYTHON="$RUNNER_TEMP/spdx/bin/python"
           ./tests/validate.sh
 
@@ -69,7 +69,7 @@ jobs:
         run: |
           export PATH="$(brew --prefix)/bin:$PATH"
           python3 -m venv "$RUNNER_TEMP/spdx"
-          "$RUNNER_TEMP/spdx/bin/pip" install -r tests/requirements-artifacts.txt
+          "$RUNNER_TEMP/spdx/bin/pip" install --require-hashes -r tests/requirements-artifacts.txt
           export SPDX_VALIDATOR_PYTHON="$RUNNER_TEMP/spdx/bin/python"
           ./tests/validate.sh
 
@@ -96,6 +96,6 @@ jobs:
             export PATH="$(brew --prefix)/bin:$PATH"
           fi
           python3 -m venv "$RUNNER_TEMP/spdx"
-          "$RUNNER_TEMP/spdx/bin/pip" install -r tests/requirements-artifacts.txt
+          "$RUNNER_TEMP/spdx/bin/pip" install --require-hashes -r tests/requirements-artifacts.txt
           export SPDX_VALIDATOR_PYTHON="$RUNNER_TEMP/spdx/bin/python"
           ./tests/release-artifact.sh

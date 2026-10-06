@@ -16,8 +16,23 @@ a virtual environment and point the tests at that interpreter:
 
 ```bash
 python3 -m venv /tmp/beacon-spdx-validator
-/tmp/beacon-spdx-validator/bin/pip install -r tests/requirements-artifacts.txt
+/tmp/beacon-spdx-validator/bin/pip install --require-hashes -r tests/requirements-artifacts.txt
 export SPDX_VALIDATOR_PYTHON=/tmp/beacon-spdx-validator/bin/python
+```
+
+The requirements file is a generated lock for the direct SPDX validator and
+all of its transitive dependencies. It includes hashes for the supported
+macOS and Linux distributions, so CI and local validation consume the same
+reviewable input. Refresh it only as a deliberate dependency update: resolve
+from the direct requirement with a universal, binary-only hash compile, review
+every version and hash change, and then verify installation with
+`--require-hashes` on both supported platforms. For example:
+
+```bash
+uv pip compile --universal --generate-hashes --only-binary=:all: \
+  --no-header \
+  --output-file tests/requirements-artifacts.txt \
+  tests/requirements-artifacts.in
 ```
 
 The test gate requires zero semantic validation messages from spdx-tools 0.8.5.
