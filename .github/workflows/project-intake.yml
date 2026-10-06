@@ -301,16 +301,35 @@ jobs:
               command_status=$?
               return "$command_status"
             fi
-            if item_json="$(PROJECT_INTAKE_ALLOW_PROJECT_FALLBACK=1 project_intake_gh \
-              "list Project items" gh project item-list "$project_number" --owner "$BASE_PROJECT_OWNER" --format json --limit 1000)"; then
-              item_json="$(jq --arg id "$item_id" '.items[] | select(.id == $id)' <<<"$item_json")"
+
+            graphql_project_item_json() {
+              local item_node_json
+
+              item_node_json="$(PROJECT_INTAKE_ALLOW_PROJECT_FALLBACK=1 project_intake_gh \
+                "view Project item" gh api graphql \
+                -f query='query($id: ID!) { node(id: $id) { ... on ProjectV2Item { id fieldValues(first: 100) { nodes { __typename ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } } } } } } }' \
+                -F id="$item_id")" || return $?
+              if [[ "$(jq -r '.data.node.id // ""' <<<"$item_node_json")" != "$item_id" ]]; then
+                echo "::error::Project item '$item_id' could not be read by id." >&2
+                return 1
+              fi
+              jq -c '
+                .data.node as $node |
+                {
+                  id: $node.id,
+                  status: ([$node.fieldValues.nodes[]? | select(.field.name == "Status") | .name][0] // ""),
+                  priority: ([$node.fieldValues.nodes[]? | select(.field.name == "Priority") | .name][0] // ""),
+                  size: ([$node.fieldValues.nodes[]? | select(.field.name == "Size") | .name][0] // ""),
+                  area: ([$node.fieldValues.nodes[]? | select(.field.name == "Area") | .name][0] // ""),
+                  initiative: ([$node.fieldValues.nodes[]? | select(.field.name == "Initiative") | .name][0] // "")
+                }' <<<"$item_node_json"
+            }
+
+            if item_json="$(graphql_project_item_json)"; then
+              :
             else
               command_status=$?
               return "$command_status"
-            fi
-            if [[ -z "$item_json" ]]; then
-              echo "::error::Project item '$item_id' was not returned after it was added." >&2
-              return 1
             fi
             if fields_json="$(PROJECT_INTAKE_ALLOW_PROJECT_FALLBACK=1 project_intake_gh \
               "list Project fields" gh project field-list "$project_number" --owner "$BASE_PROJECT_OWNER" --format json)"; then
@@ -389,9 +408,8 @@ jobs:
             [[ -n "$(jq -r '.initiative // ""' <<<"$item_json")" ]] ||
               graphql_set_single_select Initiative "$expected_initiative" || return $?
 
-            if refreshed_item_json="$(PROJECT_INTAKE_ALLOW_PROJECT_FALLBACK=1 project_intake_gh \
-              "verify Project fields" gh project item-list "$project_number" --owner "$BASE_PROJECT_OWNER" --format json --limit 1000)"; then
-              refreshed_item_json="$(jq --arg id "$item_id" '.items[] | select(.id == $id)' <<<"$refreshed_item_json")"
+            if refreshed_item_json="$(graphql_project_item_json)"; then
+              :
             else
               command_status=$?
               return "$command_status"
