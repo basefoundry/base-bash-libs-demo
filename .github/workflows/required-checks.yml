@@ -32,7 +32,7 @@ jobs:
   required:
     name: Required consumer and artifact validation
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
       PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number || inputs.pull_request_number }}
