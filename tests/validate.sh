@@ -9,6 +9,7 @@ required_files=(
     .github/base-project.yml
     LICENSE
     base_manifest.yaml
+    .github/actions/setup-spdx-validator/action.yml
     .github/workflows/issue-branch-policy.yml
     .github/workflows/project-intake.yml
     .github/workflows/tests.yml
@@ -21,6 +22,7 @@ required_files=(
     scripts/artifact-evidence.py
     scripts/resolve-framework-ref
     tests/requirements-artifacts.txt
+    tests/requirements-artifacts.in
     tests/validate-spdx.py
     tests/artifact-evidence.py
     scripts/verify-vendor

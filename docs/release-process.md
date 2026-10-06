@@ -24,16 +24,21 @@ The requirements file is a generated lock for the direct SPDX validator and
 all of its transitive dependencies. It includes hashes for the supported
 macOS and Linux distributions, so CI and local validation consume the same
 reviewable input. Refresh it only as a deliberate dependency update: resolve
-from the direct requirement with a universal, binary-only hash compile, review
+from the direct requirement with a universal Python 3.10-compatible,
+binary-only hash compile, review
 every version and hash change, and then verify installation with
 `--require-hashes` on both supported platforms. For example:
 
 ```bash
-uv pip compile --universal --generate-hashes --only-binary=:all: \
+uv pip compile --universal --python-version 3.10 --generate-hashes --only-binary=:all: \
   --no-header \
   --output-file tests/requirements-artifacts.txt \
   tests/requirements-artifacts.in
 ```
+
+`base_manifest.yaml` points to `tests/requirements-artifacts.in` because Base
+setup accepts direct `name==version` declarations, while CI and the explicit
+validator setup above consume the fully hashed transitive lock.
 
 The test gate requires zero semantic validation messages from spdx-tools 0.8.5.
 The generator uses only Python's standard library and remains offline. SHA1 is

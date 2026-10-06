@@ -1,0 +1,12 @@
+name: Set up SPDX validator
+description: Install the hash-locked artifact-test validator and export its interpreter.
+runs:
+  using: composite
+  steps:
+    - name: Install hash-locked validator
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 -m venv "$RUNNER_TEMP/spdx"
+        "$RUNNER_TEMP/spdx/bin/pip" install --require-hashes -r tests/requirements-artifacts.txt
+        printf 'SPDX_VALIDATOR_PYTHON=%s\n' "$RUNNER_TEMP/spdx/bin/python" >> "$GITHUB_ENV"
