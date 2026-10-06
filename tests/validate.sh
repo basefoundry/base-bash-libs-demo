@@ -18,6 +18,7 @@ required_files=(
     lib/beacon.sh
     scripts/release-artifact
     scripts/artifact-evidence.py
+    scripts/resolve-framework-ref
     tests/requirements-artifacts.txt
     tests/validate-spdx.py
     tests/artifact-evidence.py
@@ -28,6 +29,7 @@ required_files=(
     tests/candidate-smoke.sh
     tests/candidate.bats
     tests/vendor.bats
+    tests/framework-ref.bats
     tests/docs-examples.sh
     tests/docs-contracts.sh
     tests/minimal-consumer.sh
@@ -52,7 +54,7 @@ for file in "${required_files[@]}"; do
     }
 done
 
-for executable in bin/beacon examples/minimal-cli scripts/release-artifact scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/minimal-consumer.sh tests/release-artifact.sh; do
+for executable in bin/beacon examples/minimal-cli scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/minimal-consumer.sh tests/release-artifact.sh; do
     [[ -x "$executable" ]] || {
         printf 'Expected executable file: %s\n' "$executable" >&2
         exit 1
@@ -65,7 +67,7 @@ command -v shellcheck > /dev/null 2>&1 || {
     printf 'shellcheck is required.\n' >&2
     exit 1
 }
-shellcheck bin/beacon examples/minimal-cli lib/beacon.sh scripts/release-artifact scripts/verify-vendor tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/minimal-consumer.sh tests/release-artifact.sh || exit $?
+shellcheck bin/beacon examples/minimal-cli lib/beacon.sh scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/minimal-consumer.sh tests/release-artifact.sh || exit $?
 
 ./tests/docs-examples.sh || exit $?
 ./tests/docs-contracts.sh || exit $?
@@ -75,7 +77,7 @@ command -v bats > /dev/null 2>&1 || {
     printf 'bats is required.\n' >&2
     exit 1
 }
-bats tests/beacon.bats tests/lifecycle.bats tests/candidate.bats tests/vendor.bats || exit $?
+bats tests/beacon.bats tests/lifecycle.bats tests/candidate.bats tests/vendor.bats tests/framework-ref.bats || exit $?
 
 ./tests/bash-42-smoke.sh || exit $?
 ./tests/candidate-smoke.sh "$PWD/vendor/base-bash-libs" || exit $?

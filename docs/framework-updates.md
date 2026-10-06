@@ -26,7 +26,10 @@ It does not modify `vendor/base-bash-libs` or `base-bash-libs.lock`.
 
 The `Framework Compatibility` workflow performs the same check on Ubuntu and
 macOS. Scheduled runs use `v2.0.0`; manual runs require an explicit release tag
-or 40-character commit and reject branch names.
+or 40-character commit and reject branch names. Release tags are resolved via
+their explicit `refs/tags/` namespace (including annotated-tag peeling), and
+the checkout always uses the resulting full commit. A version-shaped branch is
+never accepted as a candidate.
 
 ## Update the committed pin
 

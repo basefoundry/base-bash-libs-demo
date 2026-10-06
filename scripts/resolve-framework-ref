@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+resolve_usage() {
+    printf 'usage: %s REPOSITORY TAG_OR_COMMIT\n' "${0##*/}" >&2
+    exit 2
+}
+
+resolve_fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+resolve_repository="${1:-}"
+resolve_requested="${2:-}"
+[[ -n "$resolve_repository" && -n "$resolve_requested" ]] || resolve_usage
+
+if [[ "$resolve_requested" =~ ^[0-9a-f]{40}$ ]]; then
+    printf '%s\n' "$resolve_requested"
+    exit 0
+fi
+
+case "$resolve_requested" in
+    refs/heads/*|main|master|HEAD)
+        resolve_fail "moving framework reference is not allowed: $resolve_requested"
+        ;;
+    refs/tags/*)
+        resolve_tag="${resolve_requested#refs/tags/}"
+        ;;
+    *)
+        resolve_tag="$resolve_requested"
+        ;;
+esac
+
+[[ "$resolve_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || \
+    resolve_fail "expected a release tag or full commit: $resolve_requested"
+
+resolve_tag_commit() {
+    local resolve_query="$1" resolve_response resolve_sha resolve_ref
+    resolve_response="$(git ls-remote "$resolve_repository" "$resolve_query")" || \
+        resolve_fail "unable to query framework tag: $resolve_tag"
+    while IFS=$' \t' read -r resolve_sha resolve_ref; do
+        if [[ "$resolve_ref" == "$resolve_query" && "$resolve_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            printf '%s\n' "$resolve_sha"
+            return 0
+        fi
+    done <<< "$resolve_response"
+}
+
+resolve_commit="$(resolve_tag_commit "refs/tags/$resolve_tag^{}")"
+if [[ -z "$resolve_commit" ]]; then
+    resolve_commit="$(resolve_tag_commit "refs/tags/$resolve_tag")"
+fi
+[[ "$resolve_commit" =~ ^[0-9a-f]{40}$ ]] || \
+    resolve_fail "release tag was not found: $resolve_tag"
+printf '%s\n' "$resolve_commit"

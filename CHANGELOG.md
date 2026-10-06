@@ -12,6 +12,9 @@ and versions are tracked in the repo-root `VERSION` file.
 - Require the committed Base Bash vendor manifest to exactly match a regular,
   link-free payload inventory before verifying checksums.
 
+- Resolve compatibility release tags through the explicit tag namespace and
+  test the resulting immutable commit instead of trusting version-shaped refs.
+
 - Bind release evidence to exact archive contents and identities; validate archive
   entries before extraction and require explicit trust before executing smoke tests.
 
