@@ -1,0 +1,106 @@
+name: Required consumer and artifact validation
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - converted_to_draft
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Pull request number whose test run should be checked.
+        required: true
+        type: string
+      head_sha:
+        description: Expected pull request head commit SHA.
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || inputs.pull_request_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  required:
+    name: Required consumer and artifact validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number || inputs.pull_request_number }}
+      EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      DISPATCH_HEAD_SHA: ${{ inputs.head_sha }}
+    steps:
+      - name: Verify the trusted aggregate of the PR test run
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pull_request_number="${PULL_REQUEST_NUMBER:-}"
+          requested_head_sha="${EVENT_HEAD_SHA:-${DISPATCH_HEAD_SHA:-}}"
+          if [[ ! "$pull_request_number" =~ ^[1-9][0-9]*$ ]]; then
+            echo 'A valid pull request number is required.' >&2
+            exit 1
+          fi
+
+          pull_request_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pull_request_number")"
+          live_head_sha="$(jq -r '.head.sha // ""' <<<"$pull_request_json")"
+          if [[ ! "$live_head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Pull request #$pull_request_number did not provide a valid head SHA." >&2
+            exit 1
+          fi
+          if [[ -n "$requested_head_sha" && "$requested_head_sha" != "$live_head_sha" ]]; then
+            echo "Pull request #$pull_request_number no longer points at requested head $requested_head_sha; current head is $live_head_sha." >&2
+            exit 1
+          fi
+
+          expected_names_json='["Ubuntu validation","Minimum runtime (Bash 4.2.53)","macOS Homebrew Bash validation","Standalone artifact (ubuntu-24.04)","Standalone artifact (macos-14)"]'
+          for attempt in {1..30}; do
+            workflow_runs_json="$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?head_sha=$live_head_sha&event=pull_request&per_page=20")"
+            run_id="$(jq -r '[.workflow_runs[]] | sort_by(.id) | last.id // ""' <<<"$workflow_runs_json")"
+            if [[ -z "$run_id" ]]; then
+              echo "The pull-request test run for $live_head_sha is not visible yet (attempt $attempt/30)."
+              sleep 10
+              continue
+            fi
+
+            jobs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
+            lane_summary="$(jq -c --argjson expected "$expected_names_json" '
+              [
+                $expected[] as $name |
+                ([.jobs[] | select(.name == $name)] | sort_by(.id) | last) as $job |
+                {
+                  name: $name,
+                  status: ($job.status // "missing"),
+                  conclusion: ($job.conclusion // "pending"),
+                  url: ($job.html_url // "")
+                }
+              ]
+            ' <<<"$jobs_json")"
+            jq -r '.[] | "\(.name)=\(.status)/\(.conclusion)"' <<<"$lane_summary"
+
+            if jq -e 'any(.[]; .status != "completed")' <<<"$lane_summary" >/dev/null; then
+              sleep 10
+              continue
+            fi
+            if jq -e 'any(.[]; .conclusion != "success")' <<<"$lane_summary" >/dev/null; then
+              echo 'One or more pull-request validation lanes did not succeed:' >&2
+              jq -r '.[] | select(.conclusion != "success") | "\(.name): \(.conclusion) \(.url)"' <<<"$lane_summary" >&2
+              exit 1
+            fi
+
+            echo "All required validation lanes succeeded for pull request #$pull_request_number at $live_head_sha."
+            exit 0
+          done
+
+          echo "Timed out waiting for the pull-request test lanes for $live_head_sha." >&2
+          exit 1
