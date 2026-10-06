@@ -53,3 +53,8 @@ The repository manifest declares the pinned artifact-test dependency in
 `test.requirements`. Run setup before testing so the SPDX validator is installed
 in the project environment; direct test-script invocations must either use that
 interpreter or set `SPDX_VALIDATOR_PYTHON` explicitly.
+
+Because `test.requirements` contributes to the manifest trust identity, adding or
+changing that file makes existing `basectl trust allow` approvals stale. Review
+the new dependency and re-run the suggested trust approval command before
+running `basectl test`.
