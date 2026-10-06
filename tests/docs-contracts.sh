@@ -38,7 +38,8 @@ for docs_contract_path in \
     five-minute-tutorial.md \
     lifecycle-and-automation.md \
     framework-updates.md \
-    release-process.md; do
+    release-process.md \
+    ci-required-checks.md; do
     grep -Fq "($docs_contract_path)" "$docs_contract_index" || {
         printf 'Documentation index is missing %s.\n' "$docs_contract_path" >&2
         exit 1

@@ -12,6 +12,7 @@ required_files=(
     .github/workflows/issue-branch-policy.yml
     .github/workflows/project-intake.yml
     .github/workflows/tests.yml
+    .github/workflows/required-checks.yml
     base-bash-libs.lock
     bin/beacon
     examples/minimal-cli
@@ -41,6 +42,7 @@ required_files=(
     docs/use-in-your-project.md
     docs/lifecycle-and-automation.md
     docs/framework-updates.md
+    docs/ci-required-checks.md
     docs/release-notes-template.md
     .github/workflows/framework-compatibility.yml
     vendor/base-bash-libs/MANIFEST.sha256

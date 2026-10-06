@@ -53,7 +53,7 @@ jobs:
             --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly" \
             --workdir /workspace \
             docker.io/library/bash@sha256:0931edd3941d0603cb3d5da1cb298cf3eb6a579e09e094c3e34e2d5e9df8cddc \
-            bash -c 'bash tests/bash-42-smoke.sh && bash tests/candidate-smoke.sh /workspace/vendor/base-bash-libs'
+            bash -c 'BASE_BASH_42_REQUIRED=1 bash tests/bash-42-smoke.sh && bash tests/candidate-smoke.sh /workspace/vendor/base-bash-libs'
 
   macos:
     name: macOS Homebrew Bash validation
@@ -99,40 +99,3 @@ jobs:
           "$RUNNER_TEMP/spdx/bin/pip" install -r tests/requirements-artifacts.txt
           export SPDX_VALIDATOR_PYTHON="$RUNNER_TEMP/spdx/bin/python"
           ./tests/release-artifact.sh
-
-  required:
-    name: Required consumer and artifact validation
-    if: ${{ always() }}
-    needs:
-      - ubuntu
-      - bash-42
-      - macos
-      - artifact
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Fail closed on required lane results
-        env:
-          UBUNTU_RESULT: ${{ needs.ubuntu.result }}
-          BASH_42_RESULT: ${{ needs['bash-42'].result }}
-          MACOS_RESULT: ${{ needs.macos.result }}
-          ARTIFACT_RESULT: ${{ needs.artifact.result }}
-        run: |
-          set -euo pipefail
-          failed=0
-          for entry in \
-            "ubuntu:$UBUNTU_RESULT" \
-            "bash-42:$BASH_42_RESULT" \
-            "macos:$MACOS_RESULT" \
-            "artifact:$ARTIFACT_RESULT"; do
-            lane="${entry%%:*}"
-            result="${entry#*:}"
-            printf '%s=%s\n' "$lane" "$result"
-            if [[ "$result" != success ]]; then
-              failed=1
-            fi
-          done
-          if (( failed != 0 )); then
-            echo 'One or more required validation lanes did not succeed.' >&2
-            exit 1
-          fi
