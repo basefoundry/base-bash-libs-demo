@@ -21,11 +21,12 @@ detailed lane results; those remain the evidence to inspect when diagnosing a
 failure. The separate trusted workflow is intentional: the aggregate itself
 must not be editable by the pull request it protects.
 
-If a validation lane is rerun after a transient failure, rerun this aggregate
-from the workflow's `workflow_dispatch` action after the lane is green, using
-the pull request number and its current head SHA. The dispatch path rechecks
-that the pull request still points at that SHA before evaluating the latest
-pull-request test run.
+If a validation lane is rerun after a transient failure, rerun the original
+trusted aggregate run from the pull request's Checks tab after the lane is
+green. That preserves the pull-request event context used by the ruleset. The
+workflow's `workflow_dispatch` action can be used for diagnostic verification
+with the pull request number and current head SHA, but its check is not the
+ruleset-safe replacement for the original pull-request run.
 
 The required-check setting is repository policy, not workflow source. Updating
 these workflows does not change the live GitHub ruleset or grant a bypass. The
