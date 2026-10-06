@@ -58,6 +58,16 @@ for file in "${required_files[@]}"; do
     }
 done
 
+artifact_requirements_input=tests/requirements-artifacts.in
+artifact_requirements_lock=tests/requirements-artifacts.txt
+while IFS= read -r requirement || [[ -n "$requirement" ]]; do
+    [[ -z "$requirement" || "$requirement" == \#* ]] && continue
+    if ! awk -v requirement="$requirement" 'index($0, requirement) == 1 { found = 1 } END { exit !found }' "$artifact_requirements_lock"; then
+        printf 'Artifact lock is missing direct requirement: %s\n' "$requirement" >&2
+        exit 1
+    fi
+done < "$artifact_requirements_input"
+
 for executable in bin/beacon examples/minimal-cli scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/minimal-consumer.sh tests/release-artifact.sh; do
     [[ -x "$executable" ]] || {
         printf 'Expected executable file: %s\n' "$executable" >&2

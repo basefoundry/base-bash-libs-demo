@@ -38,7 +38,9 @@ uv pip compile --universal --python-version 3.10 --generate-hashes --only-binary
 
 `base_manifest.yaml` points to `tests/requirements-artifacts.in` because Base
 setup accepts direct `name==version` declarations, while CI and the explicit
-validator setup above consume the fully hashed transitive lock.
+validator setup above consume the fully hashed transitive lock. Base setup
+intentionally installs the direct `.in` declarations without hashes; hash
+enforcement applies to CI and the explicit validator environment above.
 
 The test gate requires zero semantic validation messages from spdx-tools 0.8.5.
 The generator uses only Python's standard library and remains offline. SHA1 is
