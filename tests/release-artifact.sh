@@ -8,6 +8,14 @@ release_test_first="$release_test_temp/first"
 release_test_second="$release_test_temp/second"
 release_test_tampered="$release_test_temp/tampered"
 release_test_version="$(sed -n '1p' "$release_test_root/VERSION")"
+release_test_spdx_python="${SPDX_VALIDATOR_PYTHON:-python3}"
+
+if ! "$release_test_spdx_python" -c 'import spdx_tools' > /dev/null 2>&1; then
+    printf 'The pinned SPDX validator is unavailable through %s. Run "basectl setup base-bash-libs-demo" or set SPDX_VALIDATOR_PYTHON to the prepared interpreter.\n' \
+        "$release_test_spdx_python" >&2
+    exit 1
+fi
+export SPDX_VALIDATOR_PYTHON="$release_test_spdx_python"
 
 release_test_cleanup() {
     rm -rf -- "$release_test_temp"

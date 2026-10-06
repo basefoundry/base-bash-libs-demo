@@ -119,11 +119,18 @@ framework release belongs to a reviewed dependency-update change, not runtime.
 
 ## Development
 
-Install BATS and ShellCheck, then run the full gate:
+Install BATS and ShellCheck, then let Base install the declared artifact-test
+requirement and run the full gate:
 
 ```bash
-./tests/validate.sh
+basectl setup base-bash-libs-demo
+basectl test base-bash-libs-demo
 ```
+
+The setup command reads `test.requirements` from `base_manifest.yaml` and
+installs the pinned `spdx-tools` validator used by standalone artifact tests.
+If you invoke a test script directly, activate that environment or set
+`SPDX_VALIDATOR_PYTHON` to its Python interpreter.
 
 CI runs the full suite on Ubuntu and macOS with Homebrew Bash, plus a
 network-disabled smoke test on the exact minimum Bash 4.2.53 runtime.

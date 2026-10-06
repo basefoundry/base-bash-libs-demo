@@ -45,5 +45,11 @@ Useful commands:
 ```bash
 basectl check base-bash-libs-demo
 basectl doctor base-bash-libs-demo
+basectl setup base-bash-libs-demo
 basectl test base-bash-libs-demo
 ```
+
+The repository manifest declares the pinned artifact-test dependency in
+`test.requirements`. Run setup before testing so the SPDX validator is installed
+in the project environment; direct test-script invocations must either use that
+interpreter or set `SPDX_VALIDATOR_PYTHON` explicitly.
