@@ -261,6 +261,7 @@ jobs:
             local project_id
             local item_id
             local item_json
+            local item_list_json
             local fields_json
             local expected_priority
             local expected_size
@@ -268,6 +269,7 @@ jobs:
             local expected_initiative
             local refreshed_item_json
             local command_status
+            local attempt
 
             if project_list_json="$(PROJECT_INTAKE_ALLOW_PROJECT_FALLBACK=1 project_intake_gh \
               "list Projects" gh project list --owner "$BASE_PROJECT_OWNER" --format json --limit 100)"; then
@@ -301,15 +303,25 @@ jobs:
               command_status=$?
               return "$command_status"
             fi
-            if item_json="$(PROJECT_INTAKE_ALLOW_PROJECT_FALLBACK=1 project_intake_gh \
-              "list Project items" gh project item-list "$project_number" --owner "$BASE_PROJECT_OWNER" --format json --limit 1000)"; then
-              item_json="$(jq --arg id "$item_id" '.items[] | select(.id == $id)' <<<"$item_json")"
-            else
-              command_status=$?
-              return "$command_status"
-            fi
+            item_json=''
+            for attempt in {1..10}; do
+              if item_list_json="$(PROJECT_INTAKE_ALLOW_PROJECT_FALLBACK=1 project_intake_gh \
+                "list Project items" gh project item-list "$project_number" --owner "$BASE_PROJECT_OWNER" --format json --limit 1000)"; then
+                item_json="$(jq --arg id "$item_id" '.items[] | select(.id == $id)' <<<"$item_list_json")"
+              else
+                command_status=$?
+                return "$command_status"
+              fi
+              if [[ -n "$item_json" ]]; then
+                break
+              fi
+              if (( attempt < 10 )); then
+                echo "::notice::Project item '$item_id' is not visible yet; retrying in 3s (attempt $attempt/10)."
+                sleep 3
+              fi
+            done
             if [[ -z "$item_json" ]]; then
-              echo "::error::Project item '$item_id' was not returned after it was added." >&2
+              echo "::error::Project item '$item_id' was not returned after 10 visibility checks." >&2
               return 1
             fi
             if fields_json="$(PROJECT_INTAKE_ALLOW_PROJECT_FALLBACK=1 project_intake_gh \
