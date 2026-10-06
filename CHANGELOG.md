@@ -9,6 +9,10 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ### Fixed
 
+- Declare and preflight the pinned SPDX artifact-test dependency so the normal
+  Base setup and test path fails early with actionable guidance when it is
+  unavailable.
+
 - Resolve compatibility release tags through the explicit tag namespace and
   test the resulting immutable commit instead of trusting version-shaped refs.
 
