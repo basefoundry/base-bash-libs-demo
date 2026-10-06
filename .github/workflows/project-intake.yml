@@ -3,31 +3,41 @@ name: Project Intake
 on:
   issues:
     types: [opened, reopened, closed]
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, converted_to_draft, closed]
   workflow_dispatch:
     inputs:
       issue_number:
         description: Issue number to reconcile into the repo Project.
-        required: true
+        required: false
+        type: string
+      pull_request_number:
+        description: Pull request number to reconcile into the repo Project.
+        required: false
         type: string
 
 permissions:
   contents: read
   issues: read
+  pull-requests: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.issue.number || inputs.issue_number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || inputs.issue_number || inputs.pull_request_number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   sync:
-    name: Sync issue Project fields
+    name: Sync issue and PR Project fields
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       BASE_PROJECT_OWNER: ${{ github.repository_owner }}
       BASE_PROJECT_TITLE: ${{ github.event.repository.name }}
-      BASE_PROJECT_ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+      BASE_PROJECT_ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number || '' }}
+      BASE_PROJECT_PR_NUMBER: ${{ github.event.pull_request.number || inputs.pull_request_number || '' }}
       BASE_PROJECT_DEFAULT_OPEN_STATUS: Backlog
+      BASE_PROJECT_DEFAULT_PR_STATUS: In Progress
+      BASE_PROJECT_DEFAULT_UNMERGED_PR_CLOSED_STATUS: Ready
       BASE_PROJECT_DEFAULT_CLOSED_STATUS: Done
       BASE_PROJECT_DEFAULT_PRIORITY: P2
       BASE_PROJECT_DEFAULT_SIZE: S
@@ -47,9 +57,13 @@ jobs:
           fi
 
           issue_number="${BASE_PROJECT_ISSUE_NUMBER:-}"
-          if [[ -z "$issue_number" ]]; then
-            echo "::error::Issue number was not provided by the event or workflow_dispatch input."
+          pull_request_number="${BASE_PROJECT_PR_NUMBER:-}"
+          if [[ -z "$issue_number" && -z "$pull_request_number" ]]; then
+            echo "::error::Issue or pull request number was not provided by the event or workflow_dispatch input."
             exit 1
+          fi
+          if [[ -n "$pull_request_number" ]]; then
+            issue_number="pull-request:$pull_request_number"
           fi
 
           project_intake_is_auth_failure() {
@@ -176,15 +190,69 @@ jobs:
             return "$status"
           }
 
+          pull_request_json=''
+          pull_request_state=''
+          pull_request_merged='false'
+          pull_request_node_id=''
+          status_value=''
+          if [[ -n "$pull_request_number" ]]; then
+            pull_request_json="$(project_intake_gh "view pull request" gh api "repos/$GITHUB_REPOSITORY/pulls/$pull_request_number")"
+            pull_request_state="$(jq -r '.state // ""' <<<"$pull_request_json")"
+            pull_request_merged="$(jq -r '.merged // false' <<<"$pull_request_json")"
+            pull_request_node_id="$(jq -r '.node_id // ""' <<<"$pull_request_json")"
+            pull_request_head_ref="$(jq -r '.head.ref // ""' <<<"$pull_request_json")"
+            if [[ ! "$pull_request_head_ref" =~ ^(bug|enhancement|documentation|ci|security)/([1-9][0-9]*)-[0-9]{8}-[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+              echo "::error::Pull request #$pull_request_number does not use the canonical issue-backed branch format."
+              exit 1
+            fi
+            issue_number="${BASH_REMATCH[2]}"
+            if [[ "$pull_request_state" == closed ]]; then
+              if [[ "$pull_request_merged" == true ]]; then
+                status_value="$BASE_PROJECT_DEFAULT_CLOSED_STATUS"
+              else
+                status_value="$BASE_PROJECT_DEFAULT_UNMERGED_PR_CLOSED_STATUS"
+              fi
+            else
+              status_value="$BASE_PROJECT_DEFAULT_PR_STATUS"
+            fi
+          fi
+
           issue_json="$(project_intake_gh "view issue" gh api "repos/$GITHUB_REPOSITORY/issues/$issue_number")"
           issue_state="$(jq -r '.state | ascii_upcase' <<<"$issue_json")"
           issue_url="$(jq -r '.html_url' <<<"$issue_json")"
           issue_id="$(jq -r '.id' <<<"$issue_json")"
+          issue_node_id="$(jq -r '.node_id // ""' <<<"$issue_json")"
           issue_title="$(jq -r '.title' <<<"$issue_json")"
 
-          status_value="$BASE_PROJECT_DEFAULT_OPEN_STATUS"
-          if [[ "$issue_state" == "CLOSED" ]]; then
-            status_value="$BASE_PROJECT_DEFAULT_CLOSED_STATUS"
+          if [[ -z "$pull_request_number" ]]; then
+            status_value="$BASE_PROJECT_DEFAULT_OPEN_STATUS"
+            if [[ "$issue_state" == "CLOSED" ]]; then
+              status_value="$BASE_PROJECT_DEFAULT_CLOSED_STATUS"
+            fi
+          fi
+
+          project_intake_link_pull_request() {
+            local issue_node_id="$1"
+            local pull_request_node_id="$2"
+            local mutation_json
+
+            if [[ -z "$issue_node_id" || -z "$pull_request_node_id" ]]; then
+              echo "::error::Issue or pull request node id was not available for Project linkage."
+              return 1
+            fi
+            mutation_json="$(project_intake_gh "link pull request to issue" gh api graphql \
+              -f query='mutation($issueId: ID!, $pullRequestIds: [ID!]!) { addCloseIssueReferences(input: { issueId: $issueId, pullRequestIds: $pullRequestIds }) { clientMutationId } }' \
+              -F issueId="$issue_node_id" \
+              -F "pullRequestIds[]=$pull_request_node_id")"
+            if ! jq -e '.data.addCloseIssueReferences != null and ((.errors // []) | length == 0)' <<<"$mutation_json" >/dev/null; then
+              echo "::error::GitHub did not confirm the pull request to issue linkage." >&2
+              jq -c '.errors // .' <<<"$mutation_json" >&2
+              return 1
+            fi
+          }
+
+          if [[ -n "$pull_request_number" ]]; then
+            project_intake_link_pull_request "$issue_node_id" "$pull_request_node_id"
           fi
 
           project_intake_graphql_reconcile() {

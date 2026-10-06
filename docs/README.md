@@ -24,6 +24,8 @@ Choose the shortest path that answers your current question.
    pin changes, evidence, and rollback.
 7. [Release process](release-process.md) defines reproducible Beacon artifacts
    and the separately authorized publication sequence.
+8. [Project workflow](project-workflow.md) explains issue status and pull-request
+   linkage for ordinary and stacked PRs.
 
 Maintainers preparing a release should also use the
 [release-notes template](release-notes-template.md). Framework reference and
