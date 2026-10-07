@@ -60,6 +60,14 @@ grep -Fq 'intended repository gate for the pull request' "$docs_contract_root/CO
 grep -Fq 'tracks enabling it as an enforced required ruleset check' "$docs_contract_root/CONTRIBUTING.md"
 grep -Fq 'intended release-preparation merge gate' "$docs_contract_root/docs/release-process.md"
 grep -Fq 'tracks the separate ruleset update' "$docs_contract_root/docs/release-process.md"
+grep -Fq 'Required consumer and artifact validation' "$docs_contract_root/CONTRIBUTING.md"
+grep -Fq 'intentionally keeps an open pull request in' "$docs_contract_root/docs/project-workflow.md"
+grep -Fq "does not use \`In Review\`" "$docs_contract_root/docs/project-workflow.md"
+grep -Fq 'Hash-locked the SPDX artifact-test dependency' "$docs_contract_root/CHANGELOG.md"
+[[ "$(sed -n '/^### /p' "$docs_contract_root/CHANGELOG.md" | sed -n '1p')" == '### Added' ]]
+[[ "$(sed -n '/^### /p' "$docs_contract_root/CHANGELOG.md" | sed -n '2p')" == '### Changed' ]]
+[[ "$(sed -n '/^### /p' "$docs_contract_root/CHANGELOG.md" | sed -n '3p')" == '### Fixed' ]]
+[[ "$(sed -n '/^### /p' "$docs_contract_root/CHANGELOG.md" | sed -n '4p')" == '### Security' ]]
 
 for docs_contract_url in \
     'https://github.com/basefoundry/base-bash-libs' \

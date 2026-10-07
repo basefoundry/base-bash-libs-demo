@@ -25,12 +25,17 @@ Thank you for improving this project.
    git worktree add -b <branch> ../base-bash-libs-demo-worktrees/<slug> origin/<default-branch>
    ```
 
-5. Keep the pull request scoped to the issue and link it with
+5. If the issue is in the repository Project, move it to `In Progress` before
+   branch work begins. Leave it in `In Progress` while the pull request is
+   open; this repository intentionally does not use `In Review`. A merged pull
+   request moves it to `Done`, while an unmerged closed pull request returns it
+   to `Ready`.
+6. Keep the pull request scoped to the issue and link it with
    `Fixes #<issue>` or `Closes #<issue>` when merge should close the issue.
-6. Run the project checks before opening or updating a pull request.
-7. Update `CHANGELOG.md` only for notable user-visible or release-worthy
+7. Run the project checks before opening or updating a pull request.
+8. Update `CHANGELOG.md` only for notable user-visible or release-worthy
    changes.
-8. After merge, sync the default branch, remove the worktree, and delete merged
+9. After merge, sync the default branch, remove the worktree, and delete merged
    local and remote branches when safe:
 
    ```bash
