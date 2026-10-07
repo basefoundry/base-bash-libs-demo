@@ -46,8 +46,9 @@ display values, but it cannot infer how arbitrary application files should be
 sanitized. Beacon's `beacon_load_secret_values` and
 `beacon_write_redacted_file` remain application code for that reason.
 
-Base Bash also requires Bash 4.2 or newer; it does not turn Bash into a
-cross-language runtime or make macOS `/bin/bash` 3.2 sufficient. Those are
+Base Bash enforces Bash 4.2 or newer; the tested minimum is Bash 4.2.53. It does
+not turn Bash into a cross-language runtime or make macOS `/bin/bash` 3.2
+sufficient. Those are
 adoption constraints, not hidden implementation details.
 
 The [adoption decision guide](should-i-use-base-bash-libs.md) examines those

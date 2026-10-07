@@ -30,6 +30,6 @@ Choose the shortest path that answers your current question.
    contract used before merging changes to `main`.
 
 Maintainers preparing a release should also use the
-[release-notes template](release-notes-template.md). Framework reference and
-quickstart material live in the upstream
-[versioned documentation map](https://github.com/basefoundry/base-bash-libs/blob/main/docs/README.md).
+[release-notes template](release-notes-template.md). Beacon's committed package
+is v2.0.0, so its framework reference and quickstart material use the upstream
+[v2.0.0 documentation map](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/README.md).

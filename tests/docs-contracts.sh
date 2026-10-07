@@ -63,14 +63,23 @@ grep -Fq 'tracks the separate ruleset update' "$docs_contract_root/docs/release-
 
 for docs_contract_url in \
     'https://github.com/basefoundry/base-bash-libs' \
-    'https://github.com/basefoundry/base-bash-libs/blob/main/docs/README.md' \
-    'https://github.com/basefoundry/base-bash-libs/blob/main/docs/v2/quickstart.md' \
-    'https://github.com/basefoundry/base-bash-libs/blob/main/docs/api-reference.md'; do
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/README.md' \
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/v2/quickstart.md' \
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/api-reference.md'; do
     grep -Fq "$docs_contract_url" "$docs_contract_readme" || {
         printf 'README is missing upstream onboarding link: %s\n' "$docs_contract_url" >&2
         exit 1
     }
 done
+if grep -R -n -E 'base-bash-libs/blob/main/docs/(api-reference|v2/quickstart|README\.md)' \
+    "$docs_contract_root/README.md" "$docs_contract_root/docs" > /dev/null; then
+    printf 'Pinned consumer docs must not link API material to upstream main.\n' >&2
+    exit 1
+fi
+grep -Fq 'v2.1.0' "$docs_contract_root/docs/use-in-your-project.md"
+# Keep these literals aligned with docs/use-in-your-project.md until issue #38
+# moves Beacon's vendored pin; update the assertions with that adoption change.
+grep -Fq 'issue #38' "$docs_contract_root/docs/use-in-your-project.md"
 
 for docs_contract_heading in \
     '## Good fit' \

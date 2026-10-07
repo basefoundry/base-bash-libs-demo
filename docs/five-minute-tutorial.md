@@ -2,7 +2,7 @@
 
 This tutorial starts from a fresh clone and exercises Beacon entirely offline.
 It reads the committed fixture workspace, writes only beneath a temporary
-directory, and removes that directory when it finishes. Use Bash 4.2 or newer;
+directory, and removes that directory when it finishes. Use Bash 4.2.53 or newer;
 on macOS, `bin/beacon` discovers a supported Homebrew Bash automatically.
 
 Run the following block from the repository root. The repository test suite
