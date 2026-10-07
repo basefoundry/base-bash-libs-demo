@@ -19,7 +19,7 @@ tutorial_output="$tutorial_root/beacon-support"
 
 ./bin/beacon status | tee "$tutorial_root/status.txt"
 grep -F 'workspace_ready=yes' "$tutorial_root/status.txt"
-grep -F 'framework_version=2.0.0' "$tutorial_root/status.txt"
+grep -F 'framework_version=2.2.0' "$tutorial_root/status.txt"
 
 ./bin/beacon plan --output "$tutorial_output" | tee "$tutorial_root/plan.txt"
 grep -F 'include=config/app.env' "$tutorial_root/plan.txt"
@@ -68,12 +68,12 @@ That separation is the main extension rule: add domain policy to
 behavior. Do not source files beneath another checkout or call underscore-like
 implementation helpers.
 
-The corresponding v2.0.0 references are:
+The corresponding v2.2.0 references are:
 
-- [Public API reference](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/api-reference.md)
-- [CLI model and parsing](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/lib/bash/cli/README.md)
-- [Application configuration and lifecycle](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/lib/bash/app/README.md)
-- [Immutable pinned consumption](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/pinned-consumption.md)
+- [Public API reference](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/api-reference.md)
+- [CLI model and parsing](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/lib/bash/cli/README.md)
+- [Application configuration and lifecycle](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/lib/bash/app/README.md)
+- [Immutable pinned consumption](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/pinned-consumption.md)
 
 ## Safe experiments
 

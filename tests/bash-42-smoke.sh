@@ -13,7 +13,7 @@ if [[ "${BASE_BASH_42_REQUIRED:-0}" == 1 ]]; then
 fi
 
 "$smoke_root/scripts/verify-vendor" || exit $?
-"$smoke_root/bin/beacon" status | grep -F 'framework_version=2.0.0' >/dev/null || exit $?
+"$smoke_root/bin/beacon" status | grep -F 'framework_version=2.2.0' >/dev/null || exit $?
 "$smoke_root/bin/beacon" plan --output "$smoke_output" | grep -F 'selected_files=3' >/dev/null || exit $?
 "$smoke_root/bin/beacon" collect --dry-run --output "$smoke_output" | grep -F 'dry_run=true' >/dev/null || exit $?
 [[ ! -e "$smoke_output" ]] || exit 1

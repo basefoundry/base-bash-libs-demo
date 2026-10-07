@@ -54,7 +54,7 @@ run_verifier() {
 
     cp "$REPO_ROOT/vendor/base-bash-libs/MANIFEST.sha256" \
         "$VENDOR_ROOT/vendor/base-bash-libs/MANIFEST.sha256"
-    sed '1s/  VERSION$/  .\/VERSION/' \
+    sed 's/  VERSION$/  .\/VERSION/' \
         "$VENDOR_ROOT/vendor/base-bash-libs/MANIFEST.sha256" \
         > "$TEST_ROOT/manifest"
     mv "$TEST_ROOT/manifest" "$VENDOR_ROOT/vendor/base-bash-libs/MANIFEST.sha256"

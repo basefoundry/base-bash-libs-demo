@@ -69,8 +69,8 @@ fi
 - `base_file_section_needs_update` returns `0` when an add/update would change the
   target file, `1` when the first existing marked section already matches, and
   `2` when marker pairs are asymmetric or misordered.
-- Invalid or incomplete arguments produce a usage diagnostic and return
-  nonzero without relying on unset positional parameters. Under `errexit`, use
+- Invalid or incomplete arguments produce a usage diagnostic and return `2`
+  without relying on unset positional parameters. Under `errexit`, use
   a conditional context when a nonzero inspection result is expected.
 
 ## Tests

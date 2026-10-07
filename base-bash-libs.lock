@@ -1,7 +1,7 @@
 schema_version=1
-version=2.0.0
-commit=b4243765726c133499feeabdc50154f99c0fec12
-asset=base-bash-libs-v2.0.0.tar.gz
-asset_sha256=73d6f92fab8f1a8ded7f3b4312ebbe51aa8ec0c16eacf18c2d8fa23fb5664333
-manifest_sha256=3bd51ecab87419c89330ebd0562b6c07f3ba11a26eb01181aab028660db33a37
+version=2.2.0
+commit=d8894bf4453e6b6beaa6de7ce2e082497cb236f2
+asset=base-bash-libs-v2.2.0.tar.gz
+asset_sha256=0865dfcda60eeaa7cc2cf276681984e29f1ccaf5c2858cbe58fe3a85063ab27f
+manifest_sha256=271ab04446107025904424d6bd64aba41a1f4afb888f5d59e47623fc05e74f6a
 provenance=release-artifact

@@ -13,6 +13,13 @@ base_init app_args --source "${BASH_SOURCE[0]}" --
 base_std_import gh/lib_gh.sh
 ```
 
+The public `base_gh_*` surface remains stable since v2.0.0. The current
+implementation imports the implementation-private `process` module for the
+retry-capture owner-guardian lifecycle. The process symbols remain preview and
+must be shipped in the same or an earlier release before a stable artifact uses
+this implementation; private implementation dependencies do not promote their
+public symbols.
+
 ## Public Functions
 
 - `base_gh_require_cli [install_hint]`
@@ -147,6 +154,15 @@ literal string `@-`; it is not stdin-backed. Typed fields split at their first
 a stdin reference.
 
 ### Retry evidence and scheduling
+
+The retry implementation calls internal hooks and command wrappers that execute
+under Bash's dynamic scope. Its authoritative state is therefore deliberately
+prefixed with `__base_bash_libs_gh_api_`, and
+`__base_bash_libs_gh_api_call_hook__` declares collision-shield locals for that
+state before invoking a hook. When extending
+`__base_bash_libs_gh_api_with_retry_impl__`, add a matching shield for every
+local that must survive a hook or test seam; otherwise a caller-owned variable
+with the same name can silently alter retry state.
 
 For a retry-authorized ordinary request, the helper internally adds
 `--include`, examines the bounded leading response-header block, and removes

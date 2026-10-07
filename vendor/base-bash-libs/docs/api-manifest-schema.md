@@ -15,7 +15,7 @@ The current schema is `1` and the manifest identifies itself with
 | Field | Meaning |
 | --- | --- |
 | `schema_version` | Manifest schema compatibility number. |
-| `manifest_version` | API release line represented by the manifest (`2.0.0` during v2 development). |
+| `manifest_version` | API release represented by the manifest; it follows the repository's shared post-GA v2 SemVer policy. |
 | `minimum_bash` | Minimum supported Bash runtime (`4.2`). |
 | `generated_reference` | Checked-in API reference generated from this manifest. |
 | `migration_inventory` | Normative v1-to-v2 behavior and symbol migration record. |
@@ -33,14 +33,22 @@ metadata:
   `executable-launcher` for `bin/base-bash`.
 - `dependencies` names other manifest modules. `scripts/api-manifest check`
   rejects missing modules and dependency cycles.
+- `implementation_dependencies` names private runtime modules used to implement
+  a stable public module. They are checked for existence but do not change the
+  public dependency closure or promote a preview module's symbols. A release
+  must ship the private dependency before the stable implementation is used.
 - `public_symbols` is the complete exported function set. The checker compares
   it with declarations in the source file and rejects both undocumented and
   duplicate symbols.
 - `signature_source` points to the README or charter containing call-specific
   signatures and examples. `inputs`, `outputs`, `statuses`, and `side_effects`
   provide the module-level contract inherited by each listed symbol.
-- `stability`, `since`, and `deprecated` are required release metadata. A
-  future deprecation must add a migration-inventory entry before changing the
+- `stability`, `since`, and `deprecated` are required release metadata. Stable
+  modules must name a supported `2.x` release in `since`. A preview module uses
+  `since: unreleased` only before its first release; once it ships, `since`
+  records the first release that contains it while `stability: preview`
+  remains explicit. The checker rejects `since: unreleased` for stable modules.
+  A future deprecation must add a migration-inventory entry before changing the
   symbol.
 
 The artifact list makes packaging membership reviewable. Every module must
@@ -63,7 +71,10 @@ scripts/api-manifest artifact-paths
 
 `check` validates schema and metadata, module/file existence, duplicate symbols,
 source/manifest drift, dependency cycles, unsafe paths, packaging membership,
-and the generated API reference. The repository validation suite obtains its
+and the generated API reference. `release-check RELEASE_REF` additionally
+verifies that every stable module and public symbol in the current manifest is
+present in the local Git release tree named by `RELEASE_REF`; preview modules
+are intentionally excluded until they are promoted. The repository validation suite obtains its
 module source, test, and artifact paths from these commands instead of keeping
 another hardcoded module list.
 

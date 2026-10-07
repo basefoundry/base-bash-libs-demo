@@ -16,6 +16,35 @@ create_script() {
     chmod +x "$script_path"
 }
 
+launcher_file_mode() {
+    if stat -c '%a' "$1" >/dev/null 2>&1; then
+        stat -c '%a' "$1"
+    else
+        stat -f '%Lp' "$1"
+    fi
+}
+
+copy_launcher_package() {
+    local package_root="$1"
+
+    mkdir -p "$package_root/bin" "$package_root/lib/bash" "$package_root/scripts"
+    cp "$BASE_REPO_ROOT/bin/base-bash" "$package_root/bin/base-bash"
+    cp "$BASE_REPO_ROOT/VERSION" "$package_root/VERSION"
+    cp "$BASE_REPO_ROOT/lib/bash/base-bash-libs.release" "$package_root/lib/bash/base-bash-libs.release"
+    cp "$BASE_REPO_ROOT/scripts/standalone-app-payloads.txt" "$package_root/scripts/standalone-app-payloads.txt"
+    chmod +x "$package_root/bin/base-bash"
+}
+
+commit_launcher_package() {
+    local package_root="$1"
+
+    git -C "$package_root" init -q
+    git -C "$package_root" add .
+    env GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid \
+        GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid \
+        git -C "$package_root" commit -qm fixture
+}
+
 @test "base-bash shebang preloads stdlib and calls main with filtered args" {
     local script_dir="$TEST_TMPDIR/scripts"
     local script="$script_dir/tool"
@@ -102,10 +131,21 @@ SCRIPT
     [ -f "$project_dir/lib/app.sh" ]
     [ -f "$project_dir/tests/run.sh" ]
     [ -f "$project_dir/.github/workflows/validate.yml" ]
+    grep -Eq 'actions/checkout@[0-9a-f]{40}[[:space:]]+# v4\.2\.2$' \
+        "$project_dir/.github/workflows/validate.yml"
+    grep -Eq 'bats-core/bats-action@[0-9a-f]{40}[[:space:]]+# v4\.0\.0$' \
+        "$project_dir/.github/workflows/validate.yml"
+    run grep -Eq 'uses: .+@(v[0-9]|main|master)([[:space:]]|$)' \
+        "$project_dir/.github/workflows/validate.yml"
+    [ "$status" -eq 1 ]
 
     bats_run env PATH="$BASE_REPO_ROOT/bin:$PATH" BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$project_dir/bin/app" run
     [ "$status" -eq 0 ]
     [[ "$output" == *"hello=world"* ]]
+
+    bats_run env PATH="$BASE_REPO_ROOT/bin:$PATH" BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$project_dir/bin/app" --version
+    [ "$status" -eq 0 ]
+    [ "$output" = "demo 0.1.0" ]
 
     bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile standard --dir "$project_dir"
     [ "$status" -eq 0 ]
@@ -116,9 +156,138 @@ SCRIPT
     [[ "$output" == *"refusing to overwrite existing file"* ]]
 }
 
+@test "v2 quickstart uses one explicit launcher from an unrelated cwd" {
+    local project_root="$TEST_TMPDIR/quickstart/demo"
+    local framework_root="$BASE_REPO_ROOT"
+    local framework_launcher="$framework_root/bin/base-bash"
+    local bundle="$TEST_TMPDIR/quickstart/bundle"
+
+    mkdir -p "$project_root"
+    env -i HOME="$TEST_TMPDIR/home" PATH="$framework_root/bin:$BASE_TEST_ORIG_PATH" \
+        BASE_BASH_LIBS_DIR="$framework_root/lib/bash" \
+        "$framework_launcher" init --profile standard --dir "$project_root"
+
+    run env PATH="$framework_root/bin:$BASE_TEST_ORIG_PATH" \
+        BASE_BASH_LIBS_DIR="$framework_root/lib/bash" \
+        "$framework_launcher" "$project_root/bin/app" --help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Usage:"* ]]
+
+    run env PATH="$framework_root/bin:$BASE_TEST_ORIG_PATH" \
+        BASE_BASH_LIBS_DIR="$framework_root/lib/bash" \
+        "$framework_launcher" check --project "$project_root"
+    [ "$status" -eq 0 ]
+
+    run env PATH="$framework_root/bin:$BASE_TEST_ORIG_PATH" \
+        BASE_BASH_LIBS_DIR="$framework_root/lib/bash" \
+        bash -c 'cd "$1" && ./tests/run.sh' _ "$project_root"
+    [ "$status" -eq 0 ]
+
+    run env PATH="$framework_root/bin:$BASE_TEST_ORIG_PATH" \
+        BASE_BASH_LIBS_DIR="$framework_root/lib/bash" \
+        "$framework_root/scripts/library-bundle" bundle "$bundle"
+    [ "$status" -eq 0 ]
+    run env PATH="$framework_root/bin:$BASE_TEST_ORIG_PATH" \
+        BASE_BASH_LIBS_DIR="$framework_root/lib/bash" \
+        "$framework_root/scripts/library-bundle" verify "$bundle"
+    [ "$status" -eq 0 ]
+}
+
+@test "base-bash init reconciles minimal scaffold modes under restrictive umask" {
+    local project_dir="$TEST_TMPDIR/generated"
+    local previous_umask
+
+    mkdir -p "$project_dir"
+    previous_umask="$(umask)"
+    umask 077
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+    umask "$previous_umask"
+    [ "$status" -eq 0 ]
+    [ "$(launcher_file_mode "$project_dir/bin/app")" = 755 ]
+    [ "$(launcher_file_mode "$project_dir/tests/app.bats")" = 755 ]
+    [ "$(launcher_file_mode "$project_dir/README.md")" = 644 ]
+
+    chmod 0644 "$project_dir/bin/app" "$project_dir/tests/app.bats"
+    chmod 0755 "$project_dir/README.md"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+
+    [ "$status" -eq 0 ]
+    [ "$(launcher_file_mode "$project_dir/bin/app")" = 755 ]
+    [ "$(launcher_file_mode "$project_dir/tests/app.bats")" = 755 ]
+    [ "$(launcher_file_mode "$project_dir/README.md")" = 644 ]
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" check --project "$project_dir"
+    [ "$status" -eq 0 ]
+}
+
+@test "base-bash init reconciles standard profile executable modes" {
+    local project_dir="$TEST_TMPDIR/generated" path
+    local -a executable_paths=(bin/app tests/app.bats tests/run.sh tools/shfmt-check.sh)
+
+    mkdir -p "$project_dir"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile standard --dir "$project_dir"
+    [ "$status" -eq 0 ]
+    chmod 0644 "${executable_paths[@]/#/$project_dir/}"
+    chmod 0755 "$project_dir/Makefile"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile standard --dir "$project_dir"
+
+    [ "$status" -eq 0 ]
+    for path in "${executable_paths[@]}"; do
+        [ "$(launcher_file_mode "$project_dir/$path")" = 755 ]
+    done
+    [ "$(launcher_file_mode "$project_dir/Makefile")" = 644 ]
+}
+
+@test "base-bash init keeps failed new-file chmod atomic and recoverable" {
+    local project_dir="$TEST_TMPDIR/generated"
+    local stub_dir="$TEST_TMPDIR/stub-bin"
+    local real_chmod
+
+    mkdir -p "$project_dir" "$stub_dir"
+    real_chmod="$(command -v chmod)"
+    cat >"$stub_dir/chmod" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${2-}" == */bin/app.base-bash-init.* ]]; then
+    exit 9
+fi
+exec "${REAL_CHMOD:?}" "$@"
+EOF
+    chmod +x "$stub_dir/chmod"
+
+    bats_run env REAL_CHMOD="$real_chmod" PATH="$stub_dir:$PATH" BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" \
+        "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+
+    [ "$status" -eq 1 ]
+    [ ! -e "$project_dir/bin/app" ]
+    [ -z "$(find "$project_dir/bin" -name 'app.base-bash-init.*' -print -quit)" ]
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+    [ "$status" -eq 0 ]
+    [ "$(launcher_file_mode "$project_dir/bin/app")" = 755 ]
+}
+
+@test "base-bash init still refuses matching symlink targets" {
+    local project_dir="$TEST_TMPDIR/generated"
+    local target="$TEST_TMPDIR/README.target"
+
+    mkdir -p "$project_dir"
+    "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+    mv "$project_dir/README.md" "$target"
+    ln -s "$target" "$project_dir/README.md"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+
+    [ "$status" -eq 2 ]
+    [ -L "$project_dir/README.md" ]
+    [[ "$output" == *"refusing to overwrite existing file"* ]]
+}
+
 @test "base-bash check validates a consumer project without mutation" {
     local project_dir="$TEST_TMPDIR/generated"
-    local before after
+    local before after expected_version
+
+    expected_version="$(<"$BASE_REPO_ROOT/VERSION")"
 
     mkdir -p "$project_dir"
     bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
@@ -127,7 +296,8 @@ SCRIPT
 
     bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" check --project "$project_dir"
     [ "$status" -eq 0 ]
-    [[ "$output" == *"OK project/framework-pin: 2.0.0"* ]]
+    [[ "$output" == *"project/framework-pin: $expected_version@"* ]]
+    [[ "$output" == *"OK project/application-version: CLI is bound to VERSION 0.1.0"* ]]
     [[ "$output" == *"OK project/namespace:"* ]]
 
     bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" check --project "$project_dir" --format json
@@ -137,6 +307,171 @@ SCRIPT
 
     after="$(find "$project_dir" -type f -exec shasum {} + | sort)"
     [ "$before" = "$after" ]
+}
+
+@test "base-bash check emits parseable JSON for control characters in paths" {
+    local project_dir="$TEST_TMPDIR/generated"
+    local control_file="$project_dir/lib/line"$'\n'"break.sh"
+    local missing_project="$TEST_TMPDIR/missing"$'\n'"project"
+
+    mkdir -p "$project_dir"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+    [ "$status" -eq 0 ]
+    printf '%s\n' ':' >"$control_file"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" check --project "$project_dir" --format json
+    [ "$status" -eq 0 ]
+    jq -e . >/dev/null <<<"$output"
+    [[ "$output" == *$'syntax:lib/line\\nbreak.sh'* ]]
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" check --project "$missing_project" --format json
+    [ "$status" -eq 1 ]
+    jq -e . >/dev/null <<<"$output"
+    [[ "$output" == *$'missing\\nproject'* ]]
+}
+
+@test "base-bash init pins clean and detached source checkouts to exact HEAD" {
+    local package_root="$TEST_TMPDIR/package"
+    local project_root="$TEST_TMPDIR/project"
+    local detached_project_root="$TEST_TMPDIR/detached-project"
+    local expected_commit
+
+    copy_launcher_package "$package_root"
+    commit_launcher_package "$package_root"
+    expected_commit="$(git -C "$package_root" rev-parse HEAD)"
+    mkdir -p "$project_root" "$detached_project_root"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$package_root/bin/base-bash" init --dir "$project_root"
+    [ "$status" -eq 0 ]
+    grep -Fx "source_commit=$expected_commit" "$project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'dirty_state=clean' "$project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'verification=pin-and-verify-before-update' "$project_root/BASE_BASH_LIBS_PIN"
+
+    git -C "$package_root" checkout --detach -q
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$package_root/bin/base-bash" init --dir "$detached_project_root"
+    [ "$status" -eq 0 ]
+    grep -Fx "source_commit=$expected_commit" "$detached_project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'dirty_state=clean' "$detached_project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'verification=pin-and-verify-before-update' "$detached_project_root/BASE_BASH_LIBS_PIN"
+}
+
+@test "base-bash init marks dirty source checkout provenance as development-unverified" {
+    local package_root="$TEST_TMPDIR/package"
+    local project_root="$TEST_TMPDIR/project"
+    local expected_commit
+
+    copy_launcher_package "$package_root"
+    commit_launcher_package "$package_root"
+    expected_commit="$(git -C "$package_root" rev-parse HEAD)"
+    printf 'dirty\n' > "$package_root/untracked"
+    mkdir -p "$project_root"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$package_root/bin/base-bash" init --dir "$project_root"
+
+    [ "$status" -eq 0 ]
+    grep -Fx "source_commit=$expected_commit" "$project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'dirty_state=dirty' "$project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'verification=development-unverified' "$project_root/BASE_BASH_LIBS_PIN"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$package_root/bin/base-bash" check --project "$project_root"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"WARN project/framework-pin:"*"development-unverified"* ]]
+}
+
+@test "base-bash init retains verified release artifact provenance" {
+    local package_root="$TEST_TMPDIR/package"
+    local project_root="$TEST_TMPDIR/project"
+    local expected_commit=1111111111111111111111111111111111111111
+
+    copy_launcher_package "$package_root"
+    printf 'schema_version=1\nversion=2.0.0\ncommit=%s\ndirty_state=clean\nprovenance=release-artifact\n' \
+        "$expected_commit" > "$package_root/lib/bash/base-bash-libs.release"
+    mkdir -p "$project_root"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$package_root/bin/base-bash" init --dir "$project_root"
+
+    [ "$status" -eq 0 ]
+    grep -Fx "source_commit=$expected_commit" "$project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'dirty_state=clean' "$project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'verification=pin-and-verify-before-update' "$project_root/BASE_BASH_LIBS_PIN"
+}
+
+@test "base-bash init makes missing identity explicit and project check rejects a false immutable claim" {
+    local package_root="$TEST_TMPDIR/package"
+    local project_root="$TEST_TMPDIR/project"
+
+    copy_launcher_package "$package_root"
+    mkdir -p "$project_root"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$package_root/bin/base-bash" init --dir "$project_root"
+
+    [ "$status" -eq 0 ]
+    grep -Fx 'source_commit=unknown' "$project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'dirty_state=unknown' "$project_root/BASE_BASH_LIBS_PIN"
+    grep -Fx 'verification=development-unverified' "$project_root/BASE_BASH_LIBS_PIN"
+
+    sed 's/verification=development-unverified/verification=pin-and-verify-before-update/' \
+        "$project_root/BASE_BASH_LIBS_PIN" > "$project_root/BASE_BASH_LIBS_PIN.new"
+    mv "$project_root/BASE_BASH_LIBS_PIN.new" "$project_root/BASE_BASH_LIBS_PIN"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$package_root/bin/base-bash" check --project "$project_root"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ERROR project/framework-pin: inconsistent verification, commit, or dirty-state metadata"* ]]
+}
+
+@test "consumer check accepts canonical application and v2 pin prereleases" {
+    local project_dir="$TEST_TMPDIR/generated"
+
+    mkdir -p "$project_dir"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+    [ "$status" -eq 0 ]
+    printf '10.20.30-rc.7\n' >"$project_dir/VERSION"
+    sed 's/^version=.*/version=2.1.0-beta.3/' "$project_dir/BASE_BASH_LIBS_PIN" >"$project_dir/BASE_BASH_LIBS_PIN.new"
+    mv "$project_dir/BASE_BASH_LIBS_PIN.new" "$project_dir/BASE_BASH_LIBS_PIN"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" check --project "$project_dir"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"OK project/version: 10.20.30-rc.7"* ]]
+    [[ "$output" == *"project/framework-pin: 2.1.0-beta.3@"* ]]
+}
+
+@test "consumer check rejects noncanonical application versions and framework pins" {
+    local project_dir="$TEST_TMPDIR/generated"
+
+    mkdir -p "$project_dir"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+    [ "$status" -eq 0 ]
+    printf '01.0.0\n' >"$project_dir/VERSION"
+    sed 's/^version=.*/version=2.not-a-version/' "$project_dir/BASE_BASH_LIBS_PIN" >"$project_dir/BASE_BASH_LIBS_PIN.new"
+    mv "$project_dir/BASE_BASH_LIBS_PIN.new" "$project_dir/BASE_BASH_LIBS_PIN"
+
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" check --project "$project_dir"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ERROR project/version: invalid VERSION '01.0.0'"* ]]
+    [[ "$output" == *"ERROR project/framework-pin: requires a canonical v2 version, found '2.not-a-version'"* ]]
+}
+
+@test "generated application version follows VERSION and project check detects static divergence" {
+    local project_dir="$TEST_TMPDIR/generated-version"
+
+    mkdir -p "$project_dir"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" init --profile minimal --dir "$project_dir"
+    [ "$status" -eq 0 ]
+    printf '1.2.3-rc.1\n' > "$project_dir/VERSION"
+
+    bats_run env PATH="$BASE_REPO_ROOT/bin:$PATH" BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$project_dir/bin/app" --version
+    [ "$status" -eq 0 ]
+    [ "$output" = "demo 1.2.3-rc.1" ]
+
+    sed 's/version="\$__base_bash_generated_app_version"/version=2.0.0/' \
+        "$project_dir/lib/app.sh" > "$project_dir/lib/app.sh.new"
+    mv "$project_dir/lib/app.sh.new" "$project_dir/lib/app.sh"
+    bats_run env BASE_BASH_LIBS_DIR="$BASE_BASH_DIR" "$BASE_REPO_ROOT/bin/base-bash" check --project "$project_dir" --format json
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *'"status":"ERROR","check":"application-version"'* ]]
+    [[ "$output" == *"lib/app.sh is not bound to project VERSION"* ]]
 }
 
 @test "consumer check rejects legacy v1 symbols without executing them" {

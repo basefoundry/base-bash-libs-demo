@@ -30,6 +30,15 @@ helpers are available.
 - `base_str_join <result_var> <separator> <source_array>`
   Join a caller-provided array variable into a caller-provided result variable.
 
+## Shared TSV field escaping
+
+Modules that emit line-oriented tab-delimited records share the internal
+`__base_bash_libs_str_escape_tsv_field__` primitive. It escapes backslashes,
+tabs, newlines, and carriage returns as `\`, `\t`, `\n`, and `\r` in that
+order, keeping each record on one physical line without changing ordinary
+values. The Git and application modules import `lib_str.sh` automatically when
+needed; the internal helper is not application API.
+
 ## Usage
 
 ```bash
@@ -62,6 +71,8 @@ base_str_join joined "|" parts
 - Predicate helpers require exactly two arguments, return shell status, and do
   not print output.
 - `base_str_split` preserves empty fields between repeated delimiters.
+- `base_str_split` preserves an empty first field when the input begins with the
+  separator.
 - `base_str_split` preserves a trailing empty field when the input ends with the
   separator.
 - `base_str_join` preserves empty array elements, including trailing empty elements.
@@ -72,6 +83,10 @@ base_str_join joined "|" parts
 - Named string, result, and array arguments must be valid Bash variable names.
 - Array arguments and array result variables must already be declared as indexed
   arrays, for example with `declare -a parts=()`.
+- Scalar string results must be untyped or exported-only variables; integer
+  (`-i`) and case-converting (`-l`/`-u`) attributes are rejected to prevent
+  Bash from silently changing values. Readonly variables and nameref outputs
+  are rejected before publication.
 
 ## Tests
 

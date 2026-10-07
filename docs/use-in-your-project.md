@@ -35,7 +35,7 @@ for `base-bash`; the dependency mode determines which launcher is found on
 
 ## Try the vendored release
 
-This repository already carries a verified v2.0.0 release, so the example is
+This repository already carries a verified v2.2.0 release, so the example is
 offline and immediately runnable:
 
 ```bash
@@ -60,10 +60,9 @@ brew install basefoundry/base/base-bash-libs
 
 Homebrew places `base-bash` on `PATH`; it also supplies the supported Bash
 runtime required on macOS. This command follows the current published Base Bash
-release (v2.1.0), while Beacon's vendored path remains pinned to v2.0.0 until
-the reviewed adoption work in issue #38 lands. Pin and test the package version
-according to your deployment policy rather than assuming every machine upgrades
-together.
+release (v2.2.0), matching Beacon's vendored path after the reviewed adoption
+work in issue #38. Pin and test the package version according to your deployment
+policy rather than assuming every machine upgrades together.
 
 ## Grow deliberately
 
@@ -75,9 +74,9 @@ application needs their contracts:
 - `git/lib_git.sh` for Git inspection and update helpers;
 - `str/lib_str.sh` and `list/lib_list.sh` for named string and array results.
 
-The [v2.0.0 public API reference](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/api-reference.md)
+The [v2.2.0 public API reference](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/api-reference.md)
 defines the available symbols in the vendored package. The upstream
-[v2.0.0 five-minute quickstart](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/v2/quickstart.md)
+[v2.2.0 five-minute quickstart](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/v2/quickstart.md)
 shows the immutable release path that Beacon consumes. Use Beacon's
 [five-minute tutorial](five-minute-tutorial.md) when you are ready for a
 production-shaped consumer with configuration, lifecycle, redaction, and

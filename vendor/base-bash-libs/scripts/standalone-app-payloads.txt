@@ -1,0 +1,7 @@
+# Required generated-app payload files shared by the launcher and vendor tool.
+README.md
+VERSION
+BASE_BASH_LIBS_PIN
+bin/app
+lib/app.sh
+config/app.conf.example

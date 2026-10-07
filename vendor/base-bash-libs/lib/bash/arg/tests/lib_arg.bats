@@ -87,6 +87,70 @@ create_script() {
     [ "${positionals[2]}" = "gamma" ]
 }
 
+@test "base_arg_parse rejects coercing attributes on its output arrays before publication" {
+    local stderr_file="$TEST_TMPDIR/arg-typed-output.err"
+    local rc
+    local -Au options=([existing]=sentinel)
+    local -ai positionals=(23)
+    local -a specs=("verbose|flag|--verbose|-v")
+
+    if base_arg_parse options positionals specs -- --verbose new 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "${options[existing]}" = SENTINEL ]
+    [ "${positionals[0]}" -eq 23 ]
+    [[ "$(<"$stderr_file")" == *"attributes incompatible with the associative-array output contract"* ]]
+
+    local -A plain_options=([existing]=keep)
+    if base_arg_parse plain_options positionals specs -- --verbose new 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "${plain_options[existing]}" = keep ]
+    [ "${positionals[0]}" -eq 23 ]
+    [[ "$(<"$stderr_file")" == *"attributes incompatible with the indexed-array output contract"* ]]
+
+    local -A repeatable_options=([existing]=keep)
+    local -a repeatable_positionals=(old)
+    local -ai tag_values=(23)
+    local -a repeatable_specs=("tag_values|repeatable|--tag")
+    if base_arg_parse repeatable_options repeatable_positionals repeatable_specs -- \
+        --tag new 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "${repeatable_options[existing]}" = keep ]
+    [ "${repeatable_positionals[0]}" = old ]
+    [ "${tag_values[0]}" -eq 23 ]
+    [[ "$(<"$stderr_file")" == *"attributes incompatible with the indexed-array output contract"* ]]
+}
+
+@test "base_arg_parse rejects an associative specs input when nocasematch is enabled" {
+    local -A options=()
+    local -a positionals=()
+    local -A specs=([verbose]="verbose|flag|--verbose")
+    local status
+
+    shopt -s nocasematch
+    if base_arg_parse options positionals specs -- --verbose 2>/dev/null; then
+        status=0
+    else
+        status=$?
+    fi
+
+    [ "$status" -eq 2 ]
+    [ "${#options[@]}" -eq 0 ]
+    [ "${#positionals[@]}" -eq 0 ]
+    shopt -q nocasematch
+}
+
 @test "base_arg_parse rejects readonly output arrays before parsing" {
     local script="$TEST_TMPDIR/arg-readonly-output.sh"
 
@@ -102,7 +166,7 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 2 ]
     [[ "$output" == *"result variable 'options' is readonly"* ]]
 }
 
@@ -135,7 +199,7 @@ EOF
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${__base_bash_libs_arg_options[sentinel]}" = "keep" ]
     [ "${__base_bash_libs_arg_positionals[0]}" = "sentinel" ]
     [[ "$(cat "$stderr_file")" == *"uses the reserved '__' internal namespace"* ]]
@@ -156,7 +220,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${actual_options[sentinel]}" = "keep" ]
     [ "${positionals[0]}" = "old" ]
     [[ "$(cat "$stderr_file")" == *"uses the reserved '__' internal namespace"* ]]
@@ -167,7 +231,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${actual_options[sentinel]}" = "keep" ]
     [ "${positionals[0]}" = "old" ]
     [ "${__base_bash_libs_arg_repeatable_name[0]}" = "saved" ]
@@ -186,7 +250,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${options[existing]}" = "keep" ]
 
     if base_arg_parse options positionals options -- --verbose 2>/dev/null; then
@@ -194,7 +258,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${options[existing]}" = "keep" ]
     [ "${positionals[0]}" = "old" ]
 
@@ -203,7 +267,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${options[existing]}" = "keep" ]
     [ "${positionals[0]}" = "old" ]
     [ "${specs[0]}" = "verbose|flag|--verbose|-v" ]
@@ -221,7 +285,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${options[existing]}" = "keep" ]
     [ "${include[0]}" = "saved" ]
 
@@ -231,7 +295,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${options[existing]}" = "keep" ]
     [ "${positionals[0]}" = "old" ]
     [ "${include[0]}" = "include|repeatable|--include" ]
@@ -400,12 +464,12 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"base_std_assert_variable_name expects valid Bash variable names"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_arg_parse: one or more variable names are invalid"* ]]
     [[ "$output" != *"not-valid"* ]]
 }
 
-@test "base_arg_parse asserts caller-owned array declarations" {
+@test "base_arg_parse validates caller-owned array declarations without exiting" {
     local script="$TEST_TMPDIR/arg-invalid-array-vars.sh"
 
     create_script "$script" <<EOF
@@ -420,8 +484,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"Variable 'options' must be an associative array declared by the caller."* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"variable 'options' must be a caller-declared associative array."* ]]
 
     create_script "$script" <<EOF
 #!/usr/bin/env bash
@@ -435,8 +499,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"Variable 'positionals' must be an indexed array declared by the caller."* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"variable 'positionals' must be a caller-declared indexed array."* ]]
 }
 
 @test "base_arg_parse rejects malformed specs" {

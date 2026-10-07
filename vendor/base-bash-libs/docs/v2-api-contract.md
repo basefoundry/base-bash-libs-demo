@@ -47,12 +47,20 @@ platform-specific utility's exact status.
 - Diagnostics, warnings, logs, usage text, traces, and failure explanations
   go to standard error. They never contaminate command-substitution data.
 - APIs that return a value use one pass-by-name result as their first argument,
-  followed by inputs. Result arrays are caller-declared indexed arrays and
-  scalar results are caller-owned variables.
+  followed by inputs. Each API documents whether its result is a scalar,
+  integer, indexed array, or associative array. Arrays must be declared with
+  the required kind before the call; ordinary scalar results accept an
+  untyped/exported scalar, and numeric results also accept an integer (`-i`)
+  scalar.
 - Before any side effect, an output name is checked for valid Bash identifier
   syntax, the reserved `__` prefix, readonly status, correct array kind, and
-  aliases with an input or another output. On failure, outputs remain
-  unchanged unless an API explicitly documents partial mutation.
+  aliases with an input or another output. Integer (`-i`) and case-converting
+  (`-l`/`-u`) attributes are rejected for string and array results because
+  Bash would silently coerce published values. Readonly variables and
+  namerefs are rejected; namerefs are never followed, so readonly targets,
+  cycles, and reserved targets fail safely on Bash versions that support them.
+  On failure, outputs remain unchanged unless an API explicitly documents
+  partial mutation.
 - Named-output APIs are preferred over command substitution for values that
   may contain newlines, whitespace, or leading dashes.
 
@@ -98,12 +106,24 @@ artifact's version; unknown values are explicit rather than inferred from cwd.
 Loading a second stdlib from another major version is rejected with migration
 guidance. v1 inputs are never fallback-loaded into a v2 module graph.
 
+The optional `process` module depends on `std` and must be imported only after
+the stdlib. It was first shipped in the immutable `v2.1.0` release and remains
+preview, so it is not part of the stable public API. The public `gh` symbols
+remain stable since `2.0.0`; their current implementation records `process` as
+an implementation-private dependency. That dependency is shipped in `v2.1.0`
+alongside the stable `gh` surface, while the preview process symbols do not
+become stable by association. The stdlib does not import `process`; existing
+`base_std_run*` callers therefore retain their current source and API contract.
+
 ## 5. Interactive behavior
 
-`base_std_ask_yes_no MESSAGE [yes|no]` defaults to `no` and displays `[y/N]`;
-passing `yes` displays `[Y/n]`. `y`/`n` are accepted case-insensitively, and
-Enter accepts the displayed default. Invalid input is reprompted. Missing
-`/dev/tty`, EOF, and non-interactive use return `1` without terminating.
+`base_std_ask_yes_no MESSAGE [yes|no] [input_fd]` defaults to `no` and displays
+`[y/N]`; passing `yes` displays `[Y/n]`. `y`/`n` are accepted
+case-insensitively, and Enter accepts the displayed default. Invalid input is
+reprompted. When `input_fd` is omitted, input is read from `/dev/tty`; when it
+is supplied, the caller-owned descriptor is used and remains open. Missing
+`/dev/tty`, an unavailable input descriptor, EOF, and non-interactive use
+return `1` without terminating.
 `base_std_wait_for_enter` has the same non-TTY/EOF rule. Neither API reads from
 or mutates the caller's ordinary stdin stream.
 
@@ -127,7 +147,8 @@ semantics.
   malformed launcher invocations write an explanation and usage to stderr and
   return `2`. Application failures are not converted into usage errors.
 
-The launcher itself requires Bash 4.2 or newer. On macOS Bash 3.2, a launcher
+The launcher itself requires Bash 4.2 or newer; the tested minimum is Bash 4.2.53.
+On macOS Bash 3.2, a launcher
 invocation that runs an application searches the supported candidate paths and
 re-execs itself with the first usable candidate. `--help`, `--version`, and
 `check` remain diagnostic commands and do not run the application.
@@ -160,7 +181,8 @@ argv. This mapping is the v2 migration reference:
 | `--debug-wrapper` | Enables DEBUG logging and is removed from application argv. |
 | `--verbose-wrapper` | Preserves the deprecated VERBOSE compatibility level and is removed from application argv. |
 | `--utc-wrapper` | Exports UTC logging for the initialized runtime and is removed from application argv. |
-| `--color` | Requests terminal colors and is removed from application argv. |
+| `--color` | Requests automatic terminal colors (stderr TTY and `NO_COLOR` unset) and is removed from application argv. A `--color MODE` pair remains available to the app's own parser. |
+| `--color-mode MODE` | Selects `auto`, `always`, or `never` for wrappers that do not use the standard app-option model; removed from application argv and takes precedence over app-level `--color`. `always` overrides `NO_COLOR`. |
 | `base_init --` | Stops wrapper parsing; the separator and all following values remain literal application argv. (The launcher's own script-selection `--` is not forwarded.) |
 
 No other launcher option is implicitly forwarded. Applications that need an
@@ -188,12 +210,13 @@ signature/effects reference; this table makes coverage auditable.
 | std predicates and setup | `base_std_is_interactive`, `base_std_check_bash_version`, `base_std_import`, `base_std_add_to_path`, `base_std_dedupe_path`, `base_std_print_path`, `base_std_set_log_level`, `base_std_set_log_category_level`, `base_std_log_is_enabled` | Predicates return `0/1`; package-relative import and configuration return `0/1/2`; imports are idempotent, dependency-aware, cycle-safe, cwd-independent, and reject traversal/package-root escape; PATH and log settings intentionally mutate their documented state. |
 | std logging and display | `base_std_log_fatal`, `base_std_log_error`, `base_std_log_warn`, `base_std_log_info`, `base_std_log_debug`, `base_std_log_verbose`, `base_std_log_info_file`, `base_std_log_debug_file`, `base_std_log_verbose_file`, `base_std_log_info_enter`, `base_std_log_debug_enter`, `base_std_log_verbose_enter`, `base_std_log_info_leave`, `base_std_log_debug_leave`, `base_std_log_verbose_leave`, `base_std_print_error`, `base_std_print_warn`, `base_std_print_info`, `base_std_print_success`, `base_std_print_bold`, `base_std_print_message`, `base_std_print_tty`, `base_std_dump_trace` | Diagnostics use stderr; explicit print/data helpers use stdout as documented; logging itself does not terminate. |
 | std process/error | `base_std_exit_if_error`, `base_std_fatal_error`, `base_std_is_dry_run`, `base_std_run`, `base_std_run_or_exit` | Explicitly named fatal helpers and `base_std_run_or_exit` terminate; dry-run is a predicate; `base_std_run` returns command/timeout/supervisor status and never hides diagnostics. |
+| process (preview since `2.1.0`) | `base_process_owner_alive` | The predicate returns `0` for a directly parented owner/guardian relationship, `1` for a false relationship, and `2` for malformed PID inputs; it does not signal or mutate caller state. This preview surface is not part of the stable API and is absent from v2.0.0. |
 | std filesystem/cleanup | `base_std_safe_mkdir`, `base_std_safe_touch`, `base_std_safe_truncate`, `base_std_register_cleanup_hook`, `base_std_unregister_cleanup_hook`, `base_std_register_cleanup_path`, `base_std_unregister_cleanup_path`, `base_std_make_temp_file`, `base_std_make_temp_dir` | Mutators return recoverable failures; cleanup/temp APIs mutate only their documented registry and owned paths. |
 | std validation/reflection | `base_std_assert_variable_name`, `base_std_assert_indexed_array`, `base_std_assert_associative_array`, `base_std_command_path`, `base_std_function_exists`, `base_std_assert_function_exists`, `base_std_assert_not_null`, `base_std_assert_integer`, `base_std_assert_integer_range`, `base_std_assert_arg_count`, `base_std_assert_command_exists`, `base_std_assert_file_exists`, `base_std_assert_executable`, `base_std_assert_dir_exists` | Predicates return status; explicit `assert_*` APIs are intentional fail-fast precondition checks; named outputs are validated before writes. |
 | std miscellaneous | `base_std_safe_cd`, `base_std_safe_unalias`, `base_std_get_my_source_dir`, `base_std_ask_yes_no`, `base_std_wait_for_enter` | `safe_cd` changes `PWD`; source-dir writes one validated output; interactive functions return recoverable EOF/non-TTY statuses. |
 | file | `base_file_section_exists`, `base_file_section_needs_update`, `base_file_update_file_section` | Read-only predicates do not mutate; update is idempotent, symlink-preserving, atomic, metadata-preserving, and conflict-aware. |
 | git | `base_git_detect_default_branch`, `base_git_worktree_path_for_branch`, `base_git_list_worktree_branches`, `base_git_branch_upstream`, `base_git_branch_merged_to_ref`, `base_git_list_remote_branches`, `base_git_update_repo`, `base_git_get_current_branch`, `base_git_check_script_up_to_date` | Usage and contract errors return `2`; recoverable Git failures and false predicates return `1` unless a function documents a specific status. Read-only inspections use named outputs/stdout as documented; freshness outcomes are `3` dirty, `4` behind, and `5` diverged. |
-| gh | `base_gh_require_cli`, `base_gh_auth_status_diagnostics`, `base_gh_report_command_failure`, `base_gh_run`, `base_gh_repo_from_remote_url`, `base_gh_infer_repo_from_origin`, `base_gh_repo_default_branch`, `base_gh_api_with_retry` | Usage and contract errors return `2`; recoverable GitHub failures return `1` unless the helper preserves the underlying `gh` status. Diagnostics go stderr; repository/API values use named outputs; retries are bounded and mutation-aware. |
+| gh (stable since `2.0.0`; private process implementation dependency shipped in `2.1.0`) | `base_gh_require_cli`, `base_gh_auth_status_diagnostics`, `base_gh_report_command_failure`, `base_gh_run`, `base_gh_repo_from_remote_url`, `base_gh_infer_repo_from_origin`, `base_gh_repo_default_branch`, `base_gh_api_with_retry` | Usage and contract errors return `2`; recoverable GitHub failures return `1` unless the helper preserves the underlying `gh` status. Diagnostics go stderr; repository/API values use named outputs; retries are bounded and mutation-aware. The public API remains compatible through v2.x; the private process dependency is included in the v2.1.0 artifact. |
 | str | `base_str_lower`, `base_str_upper`, `base_str_ltrim`, `base_str_rtrim`, `base_str_trim`, `base_str_contains`, `base_str_starts_with`, `base_str_ends_with`, `base_str_split`, `base_str_join` | String transforms/predicates preserve caller values until validation succeeds; split/join use validated named outputs. |
 | arg | `base_arg_parse` | Parses into caller-owned validated arrays/maps and leaves them unchanged on failure. |
 | list | `base_list_append`, `base_list_prepend`, `base_list_remove`, `base_list_contains`, `base_list_unique`, `base_list_length` | Indexed-array mutators/predicates use caller-owned arrays; usage and operational errors return rather than exit. |
@@ -216,7 +239,8 @@ validated, or repeatable (only as the final positional).
 direct caller-owned output contract. It is not silently replaced. Bashly,
 Argc, Argbash, and similar generators may adapt their build output into the
 native model, but they are optional build-time adapters and never runtime
-dependencies. The runtime stays Bash 4.2-compatible, avoids `eval`, and has no
+dependencies. The runtime stays compatible with Bash 4.2 or newer; the tested
+minimum is Bash 4.2.53. It avoids `eval` and has no
 mandatory Python, Ruby, Node, or `jq` dependency.
 
 ### Application policy contract

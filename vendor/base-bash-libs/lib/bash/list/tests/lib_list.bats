@@ -66,16 +66,14 @@ create_script() {
                 declare -a app_args=()
                 base_init app_args --
                 source "$3"
-                "$4"
-                exit $?
+                if "$4"; then status=0; else status=$?; fi
+                printf "after\n"
+                exit "$status"
             ' bash "$mode" "$BASE_BASH_DIR/std/lib_std.sh" "$BASE_BASH_DIR/list/lib_list.sh" "$function_name"
 
-            if [[ "$function_name" == base_list_append || "$function_name" == base_list_prepend ]]; then
-                [ "$status" -eq 2 ]
-            else
-                [ "$status" -eq 1 ]
-            fi
+            [ "$status" -eq 2 ]
             [[ "$output" != *"unbound variable"* ]]
+            [[ "$output" == *"after"* ]]
         done
     done
 }
@@ -93,6 +91,17 @@ create_script() {
     [ "${values[3]}" = "" ]
 }
 
+@test "base_list_prepend preserves order and empty values for an empty array" {
+    local -a values=()
+
+    base_list_prepend values "" "first value" "second"
+
+    [ "${#values[@]}" -eq 3 ]
+    [ "${values[0]}" = "" ]
+    [ "${values[1]}" = "first value" ]
+    [ "${values[2]}" = "second" ]
+}
+
 @test "base_list_remove deletes all matching values and preserves order" {
     local -a values=("alpha" "beta" "alpha" "" "gamma")
 
@@ -108,6 +117,33 @@ create_script() {
     [ "${#values[@]}" -eq 2 ]
     [ "${values[0]}" = "beta" ]
     [ "${values[1]}" = "gamma" ]
+}
+
+@test "list matching remains exact under nocasematch" {
+    local -a values=(A a)
+
+    shopt -s nocasematch
+    base_list_remove values a
+    if base_list_contains a values; then
+        shopt -u nocasematch
+        return 1
+    fi
+    base_list_contains A values
+    shopt -q nocasematch
+    shopt -u nocasematch
+
+    [ "${#values[@]}" -eq 1 ]
+    [ "${values[0]}" = "A" ]
+}
+
+@test "base_list_remove preserves a caller scratch variable with the loop-item name" {
+    local __base_bash_libs_list_item=caller-owned
+    local -a values=(alpha beta)
+
+    base_list_remove values alpha
+
+    [ "$__base_bash_libs_list_item" = caller-owned ]
+    [ "${values[*]}" = beta ]
 }
 
 @test "base_list_contains checks membership without printing" {
@@ -144,7 +180,7 @@ create_script() {
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${#values[@]}" -eq 3 ]
     [ "${values[0]}" = "alpha" ]
     [ "${values[1]}" = "alpha" ]
@@ -155,7 +191,7 @@ create_script() {
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${#values[@]}" -eq 3 ]
     [ "${values[0]}" = "alpha" ]
     [ "${values[1]}" = "alpha" ]
@@ -176,7 +212,7 @@ create_script() {
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${actual[*]}" = "keep" ]
 
     if base_list_contains alpha __base_bash_libs_list_current 2>"$stderr_file"; then
@@ -184,14 +220,14 @@ create_script() {
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
 
     if base_list_unique result __base_bash_libs_list_current 2>"$stderr_file"; then
         rc=0
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${result[*]}" = "saved" ]
 
     if base_list_length count __base_bash_libs_list_current 2>"$stderr_file"; then
@@ -199,7 +235,7 @@ create_script() {
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$count" = "saved" ]
     [ "${__base_bash_libs_list_current[*]}" = "alpha beta" ]
     [[ "$(cat "$stderr_file")" == *"uses the reserved '__' internal namespace"* ]]
@@ -253,9 +289,38 @@ EOF
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${values[*]}" = "alpha" ]
     [[ "$(cat "$stderr_file")" == *"result variable 'values' is readonly"* ]]
+}
+
+@test "list arrays reject coercing attributes and length accepts integer outputs" {
+    local stderr_file="$TEST_TMPDIR/list-typed-output.err"
+    local rc
+    local -au values=(alpha)
+    local -i count=99
+    local -u uppercase_count=sentinel
+
+    if base_list_append values beta 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "${values[*]}" = ALPHA ]
+    [[ "$(<"$stderr_file")" == *"attributes incompatible with the indexed-array output contract"* ]]
+
+    local -a plain_values=(one two)
+    base_list_length count plain_values
+    [ "$count" -eq 2 ]
+
+    if base_list_length uppercase_count plain_values 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "$uppercase_count" = SENTINEL ]
 }
 
 @test "list helpers reject invalid variable names without echoing values" {
@@ -271,8 +336,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"base_std_assert_variable_name expects valid Bash variable names"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_list_append: one or more variable names are invalid"* ]]
     [[ "$output" != *"not-valid"* ]]
 }
 
@@ -289,8 +354,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"must be an indexed array declared by the caller"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"must be a caller-declared indexed array"* ]]
 
     create_script "$script" <<EOF
 #!/usr/bin/env bash
@@ -302,8 +367,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"must be an indexed array declared by the caller"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"must be a caller-declared indexed array"* ]]
 
     create_script "$script" <<EOF
 #!/usr/bin/env bash
@@ -315,6 +380,6 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"must be an indexed array declared by the caller"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"must be a caller-declared indexed array"* ]]
 }

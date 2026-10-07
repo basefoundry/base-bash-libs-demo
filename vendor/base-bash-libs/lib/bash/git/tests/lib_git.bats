@@ -77,7 +77,11 @@ setup() {
 
     capture_command base_git_worktree_path_for_branch branch repo extra
     [ "$status" -eq 2 ]
-    [[ "$output" == *"Usage: base_git_worktree_path_for_branch <branch> [repo_dir]"* ]]
+    [[ "$output" == *"Usage: base_git_worktree_path_for_branch [--result VAR] <branch> [repo_dir]"* ]]
+
+    capture_command base_git_worktree_path_for_branch --result
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"Usage: base_git_worktree_path_for_branch [--result VAR] <branch> [repo_dir]"* ]]
 
     capture_command base_git_check_script_up_to_date --refresh script.sh
     [ "$status" -eq 2 ]
@@ -183,13 +187,16 @@ setup() {
 }
 
 @test "git worktree helpers surface producer failures" {
+    local result=unchanged
+
     git() {
         printf 'worktree command failed\n' >&2
         return 7
     }
 
-    capture_command base_git_worktree_path_for_branch feature
+    capture_command base_git_worktree_path_for_branch --result result feature
     [ "$status" -eq 1 ]
+    [ "$result" = unchanged ]
     [[ "$output" == *"Unable to list Git worktrees."* ]]
 
     capture_command base_git_list_worktree_branches
@@ -201,15 +208,15 @@ setup() {
 @test "git worktree helpers parse canonical porcelain output" {
     git() {
         if [[ "${1:-}" == "worktree" || "${3:-}" == "worktree" ]]; then
-            cat <<'EOF'
-worktree /tmp/main
-HEAD abc123
-branch refs/heads/main
-
-worktree /tmp/feature
-HEAD def456
-branch refs/heads/feature/test
-EOF
+            printf '%s\0' \
+                'worktree /tmp/main' \
+                'HEAD abc123' \
+                'branch refs/heads/main' \
+                '' \
+                'worktree /tmp/feature' \
+                'HEAD def456' \
+                'branch refs/heads/feature/test' \
+                ''
             return 0
         fi
         command git "$@"
@@ -226,6 +233,32 @@ EOF
     unset -f git
 }
 
+@test "worktree capture in command substitution does not dispatch the caller EXIT trap" {
+    local marker="$TEST_TMPDIR/exit-trap-ran"
+
+    bats_run "$BASH" -c '
+        source "$1"
+        declare -a app_args=()
+        base_init app_args --
+        source "$2"
+        marker="$3"
+        git() {
+            printf "%s\0" \
+                "worktree /tmp/main" \
+                "HEAD abc123" \
+                "branch refs/heads/main" \
+                ""
+        }
+        trap '\''printf fired > "$marker"'\'' EXIT
+        output="$(base_git_worktree_path_for_branch main)"
+        [[ "$output" == /tmp/main && ! -e "$marker" ]] || exit 1
+        trap - EXIT
+    ' bash "$BASE_BASH_DIR/std/lib_std.sh" "$BASE_BASH_DIR/git/lib_git.sh" "$marker"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$marker" ]
+}
+
 @test "git worktree command arrays are Bash 4.2 nounset-safe" {
     bats_run "$BASH" -c '
         set -u
@@ -234,14 +267,15 @@ EOF
         base_init app_args --
         source "$2"
         git() {
-            printf "%s\n" \
+            printf "%s\0" \
                 "worktree /tmp/main" \
                 "HEAD abc123" \
                 "branch refs/heads/main" \
                 "" \
                 "worktree /tmp/feature" \
                 "HEAD def456" \
-                "branch refs/heads/feature/test"
+                "branch refs/heads/feature/test" \
+                ""
         }
         base_git_worktree_path_for_branch feature/test
         base_git_list_worktree_branches /tmp/repo
@@ -252,6 +286,79 @@ EOF
     [[ "$output" == *$'/tmp/main\tmain'* ]]
     [[ "$output" == *$'/tmp/feature\tfeature/test'* ]]
     [[ "$output" != *"unbound variable"* ]]
+}
+
+@test "worktree helpers preserve control paths and escape list records" {
+    local physical_tmpdir
+    physical_tmpdir="$(cd "$TEST_TMPDIR" && pwd -P)"
+    local repo="$physical_tmpdir/repo"
+    local control_path="$physical_tmpdir/feature"$'\twith-tab\nwith-newline\n'
+    local spaced_path="$physical_tmpdir/feature with spaces"
+    local detached_path="$physical_tmpdir/detached"$'\nworktree'
+    local actual_path=unset escaped_path list_file="$TEST_TMPDIR/worktrees.out"
+
+    init_git_repo "$repo"
+    printf 'base\n' >"$repo/data.txt"
+    commit_all "$repo" "Initial commit"
+    git -C "$repo" worktree add -b feature/control "$control_path" >/dev/null 2>&1
+    git -C "$repo" worktree add -b feature/spaces "$spaced_path" >/dev/null 2>&1
+    git -C "$repo" worktree add --detach "$detached_path" HEAD >/dev/null 2>&1
+
+    base_git_worktree_path_for_branch --result actual_path feature/control "$repo"
+    [ "$actual_path" = "$control_path" ]
+
+    capture_command base_git_worktree_path_for_branch feature/spaces "$repo"
+    [ "$status" -eq 0 ]
+    [ "$output" = "$spaced_path" ]
+
+    base_git_list_worktree_branches "$repo" >"$list_file"
+    escaped_path="${control_path//\\/\\\\}"
+    escaped_path="${escaped_path//$'\t'/\\t}"
+    escaped_path="${escaped_path//$'\n'/\\n}"
+    escaped_path="${escaped_path//$'\r'/\\r}"
+    grep -Fx "$repo"$'\tmain' "$list_file"
+    grep -Fx "$spaced_path"$'\tfeature/spaces' "$list_file"
+    grep -Fx "$escaped_path"$'\tfeature/control' "$list_file"
+    [ "$(awk 'END { print NR }' "$list_file")" -eq 3 ]
+    ! grep -F detached "$list_file"
+}
+
+@test "worktree named output rejects invalid and readonly variables before Git" {
+    local git_called=0
+    local result=unchanged
+    readonly result
+
+    git() {
+        git_called=1
+        return 0
+    }
+
+    capture_command base_git_worktree_path_for_branch --result not-valid feature
+    [ "$status" -eq 2 ]
+    [ "$git_called" -eq 0 ]
+
+    capture_command base_git_worktree_path_for_branch --result result feature
+    [ "$status" -eq 2 ]
+    [ "$result" = unchanged ]
+    [ "$git_called" -eq 0 ]
+    unset -f git
+}
+
+@test "worktree named output does not collide with helper locals" {
+    local branch=unchanged
+
+    git() {
+        printf '%s\0' \
+            'worktree /tmp/collision-safe' \
+            'HEAD abc123' \
+            'branch refs/heads/feature' \
+            ''
+    }
+
+    base_git_worktree_path_for_branch --result branch feature
+
+    [ "$branch" = /tmp/collision-safe ]
+    unset -f git
 }
 
 @test "git branch and remote helpers use generic names" {
@@ -307,6 +414,22 @@ EOF
     [ "$rc" -eq 2 ]
     [ "$branch" = "sentinel" ]
     [[ "$(cat "$stderr_file")" == *"result variable 'branch' is readonly"* ]]
+}
+
+@test "base_git_get_current_branch rejects coercing scalar outputs before repository access" {
+    local repo="$TEST_TMPDIR/repo"
+    local stderr_file="$TEST_TMPDIR/git-typed-output.err"
+    local rc
+    local -i branch=42
+
+    if base_git_get_current_branch "$repo" branch 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "$branch" -eq 42 ]
+    [[ "$(<"$stderr_file")" == *"attributes incompatible with the scalar output contract"* ]]
 }
 
 @test "Git result helpers reject exact internal holder names before locals or mutation" {
@@ -419,7 +542,7 @@ EOF
     bats_run base_git_get_current_branch "$repo" "bad-name"
 
     [ "$status" -eq 2 ]
-    [[ "$output" == *"base_git_get_current_branch: result variable name must be a valid Bash variable name"* ]]
+    [[ "$output" == *"base_git_get_current_branch: one or more variable names are invalid"* ]]
     [[ "$output" != *"invalid variable name"* ]]
 }
 
@@ -427,6 +550,7 @@ EOF
     capture_command base_git_update_repo
 
     [ "$status" -eq 2 ]
+    [[ "$output" == *"Invalid argument count."* ]]
     [[ "$output" == *"Usage: base_git_update_repo /path/to/repo [allowed_dirty_path] [expected_branch]"* ]]
     [[ "$output" != *"Usage: update_repo"* ]]
 }
@@ -445,6 +569,47 @@ EOF
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"has local changes; skipping auto-update"* ]]
+}
+
+@test "base_git_update_repo rejects a descendant without mutating its repository" {
+    local before_head
+    local other="$TEST_TMPDIR/other"
+    local remote="$TEST_TMPDIR/remote.git"
+    local repo="$TEST_TMPDIR/repo"
+    local nested="$repo/nested"
+
+    create_tracked_repo_with_upstream "$repo" "$remote" "data.txt" "first"
+    before_head="$(git -C "$repo" rev-parse HEAD)"
+
+    git clone "$remote" "$other" >/dev/null 2>&1
+    git -C "$other" config user.name "Bats Test"
+    git -C "$other" config user.email "bats@example.com"
+    printf '%s\n' second > "$other/data.txt"
+    git -C "$other" add data.txt
+    git -C "$other" commit -m "Second commit" >/dev/null 2>&1
+    git -C "$other" push origin main >/dev/null 2>&1
+    mkdir -p "$nested"
+
+    capture_command base_git_update_repo "$nested" "" main
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"is not a Git repository root"* ]]
+    [ "$(git -C "$repo" rev-parse HEAD)" = "$before_head" ]
+    [ "$(cat "$repo/data.txt")" = first ]
+    [ -z "$(git -C "$repo" status --porcelain)" ]
+}
+
+@test "base_git_update_repo accepts a case-variant root on case-insensitive filesystems" {
+    local repo="$TEST_TMPDIR/repo"
+    local remote="$TEST_TMPDIR/remote.git"
+    local case_variant="$TEST_TMPDIR/REPO"
+
+    create_tracked_repo_with_upstream "$repo" "$remote" "data.txt" "base"
+    [[ -d "$case_variant" ]] || skip "filesystem is case-sensitive"
+
+    capture_command base_git_update_repo "$case_variant" "" main
+
+    [ "$status" -eq 0 ]
 }
 
 @test "caller DEBUG does not enable reusable Git DEBUG by default" {

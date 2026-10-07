@@ -363,6 +363,67 @@ EOF
     [[ "$output" != *"unbound variable"* ]]
 }
 
+@test "base_init publishes through collision-prone caller array names" {
+    local script="$TEST_TMPDIR/init-collision.sh"
+
+    create_script "$script" <<EOF
+# base-bash-libs: passive-source
+source "$STDLIB_PATH"
+
+exercise_global() {
+    local candidate
+    for candidate in input_args filtered_args value result_name input_index parse_config color_mode_requested configure_runtime; do
+        declare -a "\$candidate=([0]=sentinel)"
+        base_init "\$candidate" -- --keep payload
+        printf 'global:%s:' "\$candidate"
+        declare -p "\$candidate"
+    done
+}
+
+exercise_local() {
+    local candidate="\$1"
+    local -a "\$candidate=([0]=sentinel)"
+    base_init "\$candidate" -- --keep payload
+    printf 'local:%s:' "\$candidate"
+    declare -p "\$candidate"
+}
+
+exercise_global
+for candidate in input_args filtered_args value result_name input_index parse_config color_mode_requested configure_runtime; do
+    exercise_local "\$candidate"
+done
+EOF
+
+    bats_run "$BASH" "$script"
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c 'global:.*--keep.*payload' <<<"$output")" -eq 8 ]
+    [ "$(grep -c 'local:.*--keep.*payload' <<<"$output")" -eq 8 ]
+    [[ "$output" != *sentinel* ]]
+    [[ "$output" != *"unbound variable"* ]]
+}
+
+@test "base_init rejects indexed arrays with coercing attributes before runtime state changes" {
+    bats_run "$BASH" -c '
+        source "$1"
+        declare -ai app_args=(42)
+        if base_init app_args -- replacement; then
+            exit 10
+        else
+            rc=$?
+        fi
+        [[ "$rc" -eq 1 ]]
+        [[ "${app_args[0]}" -eq 42 ]]
+        [[ -z "${BASE_BASH_LIBS_STD_INITIALIZED+x}" ]]
+        printf "preflight=passed\nvalue=%s\n" "${app_args[0]}"
+    ' bash "$STDLIB_PATH"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"preflight=passed"* ]]
+    [[ "$output" == *"value=42"* ]]
+    [[ "$output" == *"must be a caller-declared indexed array"* ]]
+}
+
 @test "stdlib source guard rejects caller-owned incompatible metadata" {
     bats_run bash -c '
         BASE_BASH_LIBS_STD_SOURCE_GUARD=1
@@ -568,8 +629,74 @@ EOF
 
     base_require_version "$BASE_BASH_LIBS_VERSION" >"$stdout_file"
     base_require_version "0.1.0" >>"$stdout_file"
+    base_require_version "1.4.0-alpha.1" >>"$stdout_file"
 
     [ ! -s "$stdout_file" ]
+}
+
+@test "canonical SemVer policy agrees across runtime and release boundaries" {
+    local version runtime_status release_status
+    local -a valid_versions=(
+        0.0.0
+        1.4.0
+        1.4.0-alpha.1
+        1.4.0-beta.20
+        1.4.0-rc.3
+        2.0.0
+        10.20.30
+    )
+    local -a invalid_versions=(
+        ""
+        2
+        2.0
+        2.0.0.0
+        02.0.0
+        2.00.0
+        2.0.00
+        2.0.0-alpha.0
+        2.0.0-alpha.01
+        2.0.0-preview.1
+        2.0.0+build.1
+    )
+
+    # shellcheck source=../../../../scripts/release-version-policy.sh
+    source "$BASE_REPO_ROOT/scripts/release-version-policy.sh"
+
+    for version in "${valid_versions[@]}"; do
+        __base_bash_libs_std_is_supported_version__ "$version"
+        base_bash_semver_supported "$version"
+    done
+    for version in "${invalid_versions[@]}"; do
+        runtime_status=0
+        release_status=0
+        __base_bash_libs_std_is_supported_version__ "$version" || runtime_status=$?
+        base_bash_semver_supported "$version" || release_status=$?
+        [ "$runtime_status" -eq 1 ]
+        [ "$release_status" -eq 1 ]
+    done
+}
+
+@test "canonical SemVer precedence covers historical v1 and supported v2 prereleases" {
+    local row actual minimum expected actual_status
+    local -a rows=(
+        '1.4.0|1.3.9|0'
+        '1.4.0-alpha.1|1.4.0-alpha.2|1'
+        '1.4.0-beta.1|1.4.0-alpha.99|0'
+        '1.4.0-rc.1|1.4.0-beta.99|0'
+        '1.4.0|1.4.0-rc.99|0'
+        '2.0.0-alpha.2|2.0.0-alpha.10|1'
+        '2.0.0-beta.1|2.0.0-alpha.99|0'
+        '2.0.0-rc.1|2.0.0-beta.99|0'
+        '2.0.0|2.0.0-rc.99|0'
+        '2.0.0|2.0.1-alpha.1|1'
+    )
+
+    for row in "${rows[@]}"; do
+        IFS='|' read -r actual minimum expected <<<"$row"
+        actual_status=0
+        __base_bash_libs_std_version_at_least__ "$actual" "$minimum" || actual_status=$?
+        [ "$actual_status" -eq "$expected" ]
+    done
 }
 
 @test "base_require_version returns status 1 when the loaded version is too old" {
@@ -590,13 +717,17 @@ EOF
 
 @test "base_require_version orders prereleases before a newer stable release" {
     local script="$TEST_TMPDIR/version-prerelease.sh"
+    local major minor patch future_version
+
+    IFS=. read -r major minor patch < "$BASE_REPO_ROOT/VERSION"
+    future_version="$major.$minor.$((patch + 1))"
 
     create_script "$script" <<EOF
 #!/usr/bin/env bash
 source "$STDLIB_PATH"
 base_require_version "2.0.0-rc.1"
 base_require_version "2.0.0-alpha.1"
-if base_require_version "2.0.1"; then
+if base_require_version "$future_version"; then
     exit 3
 fi
 EOF
@@ -604,16 +735,44 @@ EOF
     bats_run bash "$script"
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"base-bash-libs 2.0.1 or newer is required"* ]]
+    [[ "$output" == *"base-bash-libs $future_version or newer is required"* ]]
 }
 
-@test "base_require_version returns status 2 for invalid version strings" {
+@test "base_require_version returns status 2 for malformed minimum versions" {
     local script="$TEST_TMPDIR/version-invalid.sh"
+    local -a invalid_versions=(2 2.0 2.0.0.0 02.00.00 2.0.0-alpha.0 2.0.0-alpha.01)
 
     create_script "$script" <<EOF
 #!/usr/bin/env bash
 source "$STDLIB_PATH"
-base_require_version "1.two.0"
+for version in "\$@"; do
+    if base_require_version "\$version"; then
+        exit 9
+    elif [[ \$? -ne 2 ]]; then
+        exit 8
+    fi
+done
+EOF
+
+    bats_run bash "$script" "${invalid_versions[@]}"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"base_require_version expects supported SemVer versions"* ]]
+}
+
+@test "base_require_version returns status 2 for a malformed loaded package version" {
+    local package_root="$TEST_TMPDIR/package"
+    local script="$TEST_TMPDIR/loaded-version-invalid.sh"
+
+    mkdir -p "$package_root/lib/bash/std"
+    cp "$STDLIB_PATH" "$package_root/lib/bash/std/lib_std.sh"
+    printf '02.0.0\n' >"$package_root/VERSION"
+    create_script "$script" <<EOF
+#!/usr/bin/env bash
+source "$package_root/lib/bash/std/lib_std.sh"
+declare -a package_args=()
+base_init package_args --
+base_require_version 1.0.0
 EOF
 
     bats_run bash "$script"
@@ -785,6 +944,52 @@ EOF
     [[ "$normalized" == *"colors=disabled"* ]]
 }
 
+@test "base_init applies explicit wrapper color modes" {
+    local script="$TEST_TMPDIR/color-modes.sh"
+
+    create_script "$script" <<EOF
+#!/usr/bin/env bash
+export NO_COLOR=1
+source "$STDLIB_PATH"
+if [[ -n "\${BASE_BASH_LIBS_STD_COLOR_RED:-}" ]]; then
+    colors=enabled
+else
+    colors=disabled
+fi
+printf 'argv=%s colors=%s mode=%s wrapper=%s\\n' "\$*" "\$colors" "\$__base_bash_libs_std_color_mode" "\$__base_bash_libs_std_wrapper_color_mode"
+EOF
+
+    bats_run bash "$script" --color-mode always alpha
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"argv=alpha colors=enabled mode=always wrapper=always"* ]]
+
+    bats_run bash "$script" --color-mode=never alpha
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"argv=alpha colors=disabled mode=never wrapper=never"* ]]
+
+    bats_run bash -c '
+        source "$1"
+        declare -a args=()
+        base_init args --color-mode=invalid --
+        exit $?
+    ' bash "$STDLIB_PATH"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"invalid color mode"* ]]
+}
+
+@test "stdlib color initialization rejects invalid modes instead of silently disabling color" {
+    local status
+
+    __base_bash_libs_std_color_mode=unsupported
+    if __base_bash_libs_std_init_colors__ >/dev/null 2>"$TEST_TMPDIR/color-error"; then
+        status=0
+    else
+        status=$?
+    fi
+    [ "$status" -eq 2 ]
+    grep -F "invalid color mode 'unsupported'" "$TEST_TMPDIR/color-error"
+}
+
 @test "base_std_import loads package-relative libraries independent of cwd and is idempotent" {
     local script="$TEST_TMPDIR/base_std_import-driver.sh"
 
@@ -900,7 +1105,9 @@ EOF
 
 @test "copy-only library artifacts report embedded release identity without VERSION" {
     local artifact_dir="$TEST_TMPDIR/copy artifact"
-    local output
+    local output expected_version
+
+    expected_version="$(sed -n 's/^version=//p' "$BASE_REPO_ROOT/lib/bash/base-bash-libs.release")"
 
     mkdir -p "$artifact_dir/lib"
     cp -R "$BASE_REPO_ROOT/lib/bash" "$artifact_dir/lib/"
@@ -914,7 +1121,7 @@ EOF
             "$BASE_BASH_LIBS_COMMIT" "$BASE_BASH_LIBS_DIRTY_STATE"
     ' bash "$artifact_dir")"
 
-    [[ "$output" == *"version=2.0.0"* ]]
+    [[ "$output" == *"version=$expected_version"* ]]
     [[ "$output" == *"provenance=release-artifact"* ]]
     [[ "$output" == *"commit=unknown"* ]]
     [[ "$output" == *"dirty=unknown"* ]]
@@ -922,7 +1129,9 @@ EOF
 
 @test "symlinked package roots and spaced paths keep one physical package identity" {
     local link_path="$TEST_TMPDIR/spaced package"
-    local output
+    local output expected_version
+
+    expected_version="$(sed -n 's/^version=//p' "$BASE_REPO_ROOT/lib/bash/base-bash-libs.release")"
 
     ln -s "$BASE_REPO_ROOT" "$link_path"
     output="$(cd "$TEST_TMPDIR" && bash -c '
@@ -932,7 +1141,7 @@ EOF
     ' bash "$link_path")"
 
     [[ "$output" == *"root=$BASE_REPO_ROOT"* ]]
-    [[ "$output" == *"version=2.0.0"* ]]
+    [[ "$output" == *"version=$expected_version"* ]]
 }
 
 @test "mixed-major stdlib inputs fail with migration guidance" {
@@ -1018,6 +1227,21 @@ EOF
     base_std_dedupe_path
 
     [ "$PATH" = "/one:/two:/three" ]
+}
+
+@test "base_std_dedupe_path preserves literal glob entries" {
+    mkdir -p "$TEST_TMPDIR/literal-one" "$TEST_TMPDIR/literal-two"
+
+    bats_run bash -c '
+        source "$1"
+        shopt -s nullglob failglob
+        PATH="$2/literal*:/usr/bin:$2/literal*"
+        base_std_dedupe_path
+        printf "%s\n" "$PATH"
+    ' bash "$STDLIB_PATH" "$TEST_TMPDIR"
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "$TEST_TMPDIR/literal*:/usr/bin" ]
 }
 
 @test "base_std_print_path emits one path entry per line" {
@@ -3737,6 +3961,49 @@ EOF
     [ ! -e "$target" ]
 }
 
+@test "SIGHUP composes with caller traps and cleanup at status 129" {
+    local script="$TEST_TMPDIR/cleanup-hup-signal.sh"
+    local target="$TEST_TMPDIR/cleanup-hup-signal-target"
+    local log_file="$TEST_TMPDIR/cleanup-hup-signal.log"
+
+    printf 'temporary\n' > "$target"
+    create_script "$script" <<EOF
+#!/usr/bin/env bash
+source "$STDLIB_PATH"
+trap 'printf "caller-hup\\n" >> "$log_file"' HUP
+cleanup_once() { printf 'cleanup\\n' >> "$log_file"; }
+base_std_register_cleanup_path "$target"
+base_std_register_cleanup_hook cleanup_once
+kill -HUP "\$\$"
+EOF
+
+    bats_run bash "$script"
+
+    [ "$status" -eq 129 ]
+    [ "$(cat "$log_file")" = $'caller-hup\ncleanup' ]
+    [ ! -e "$target" ]
+}
+
+@test "ignored SIGHUP remains ignored while cleanup is registered" {
+    local script="$TEST_TMPDIR/cleanup-ignored-hup.sh"
+    local log_file="$TEST_TMPDIR/cleanup-ignored-hup.log"
+
+    create_script "$script" <<EOF
+#!/usr/bin/env bash
+source "$STDLIB_PATH"
+trap '' HUP
+cleanup_once() { printf 'cleanup\\n' >> "$log_file"; }
+base_std_register_cleanup_hook cleanup_once
+kill -HUP "\$\$"
+printf 'after-hup\\n' >> "$log_file"
+EOF
+
+    bats_run bash "$script"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$log_file")" = $'after-hup\ncleanup' ]
+}
+
 @test "later caller TERM traps compose with cleanup" {
     local script="$TEST_TMPDIR/cleanup-later-term.sh"
     local target="$TEST_TMPDIR/cleanup-later-term-target"
@@ -3997,8 +4264,8 @@ EOF
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
-    [[ "$(cat "$stderr_file")" == *"base_std_make_temp_file: result variable name must be a valid Bash variable name."* ]]
+    [ "$rc" -eq 2 ]
+    [[ "$(cat "$stderr_file")" == *"base_std_make_temp_file: one or more variable names are invalid."* ]]
 
     if base_std_make_temp_dir "also-not-valid" 2>"$stderr_file"; then
         rc=0
@@ -4006,8 +4273,8 @@ EOF
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
-    [[ "$(cat "$stderr_file")" == *"base_std_make_temp_dir: result variable name must be a valid Bash variable name."* ]]
+    [ "$rc" -eq 2 ]
+    [[ "$(cat "$stderr_file")" == *"base_std_make_temp_dir: one or more variable names are invalid."* ]]
 }
 
 @test "named output helpers reject readonly variables before side effects" {
@@ -4024,7 +4291,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$output" = "unchanged" ]
     [[ "$(cat "$stderr_file")" == *"result variable 'output' is readonly"* ]]
 
@@ -4034,9 +4301,36 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ -z "$(find "$temp_root" -mindepth 1 -maxdepth 1 -print -quit)" ]
     [[ "$(cat "$stderr_file")" == *"result variable 'output' is readonly"* ]]
+}
+
+@test "scalar named outputs reject integer and case-converting attributes before side effects" {
+    local temp_root="$TEST_TMPDIR/typed-output"
+    local stderr_file="$TEST_TMPDIR/typed-output.err"
+    local rc
+    local -i integer_output=42
+    local -u uppercase_output=sentinel
+
+    mkdir -p "$temp_root"
+    if base_std_command_path integer_output bash 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "$integer_output" -eq 42 ]
+    [[ "$(<"$stderr_file")" == *"attributes incompatible with the scalar output contract"* ]]
+
+    if TMPDIR="$temp_root" base_std_make_temp_file uppercase_output typed 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "$uppercase_output" = SENTINEL ]
+    [[ -z "$(find "$temp_root" -mindepth 1 -maxdepth 1 -print -quit)" ]]
 }
 
 @test "readonly caller locals do not collide with logging diagnostics" {
@@ -4053,7 +4347,7 @@ EOF
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$output" = "unchanged" ]
     [ "$logger" = "caller-logger" ]
     [ "$color" = "caller-color" ]
@@ -4079,7 +4373,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$command_target" = "keep-command" ]
 
     if TMPDIR="$temp_root" base_std_make_temp_file --keep __base_bash_libs_std_temp_result_name reserved 2>"$stderr_file"; then
@@ -4087,7 +4381,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$temp_target" = "keep-temp" ]
     [ -z "$(find "$temp_root" -mindepth 1 -maxdepth 1 -print -quit)" ]
 
@@ -4096,7 +4390,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$source_target" = "keep-source" ]
     [[ "$(cat "$stderr_file")" == *"uses the reserved '__' internal namespace"* ]]
     [[ "$(cat "$stderr_file")" != *"readonly variable"* ]]
@@ -4115,14 +4409,14 @@ EOF
             readonly "$2"
             base_std_command_path "$2" bash
             case $? in
-                1) ;;
+                2) ;;
                 *) exit 99 ;;
             esac
             printf "value=%s\n" "${!2}"
-            exit 1
+            exit 2
         ' bash "$STDLIB_PATH" "$candidate"
 
-        [ "$status" -eq 1 ]
+        [ "$status" -eq 2 ]
         [[ "$output" == *"result variable '$candidate' is readonly"* ]]
         [[ "$output" == *"value=unchanged"* ]]
         [[ "$output" != *"readonly variable"* ]]
@@ -4169,8 +4463,8 @@ EOF
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
-    [[ "$(cat "$stderr_file")" == *"base_std_command_path: result variable name must be a valid Bash variable name."* ]]
+    [ "$rc" -eq 2 ]
+    [[ "$(cat "$stderr_file")" == *"base_std_command_path: one or more variable names are invalid."* ]]
 }
 
 @test "base_std_function_exists checks defined Bash functions" {
@@ -4314,6 +4608,49 @@ EOF
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"Variable 'values' must be an indexed array declared by the caller."* ]]
+}
+
+@test "array assertions distinguish indexed and associative declarations with nocasematch enabled" {
+    local -a indexed_values=(alpha)
+    local -A associative_values=([alpha]=one)
+    local status
+
+    shopt -s nocasematch
+    base_std_assert_indexed_array indexed_values
+    base_std_assert_associative_array associative_values
+    shopt -q nocasematch
+
+    if (base_std_assert_indexed_array associative_values 2>/dev/null); then
+        status=0
+    else
+        status=$?
+    fi
+    [ "$status" -eq 1 ]
+
+    if (base_std_assert_associative_array indexed_values 2>/dev/null); then
+        status=0
+    else
+        status=$?
+    fi
+    [ "$status" -eq 1 ]
+    shopt -q nocasematch
+}
+
+@test "array-kind validation keeps indexed diagnostics case-sensitive with nocasematch" {
+    local -A associative_values=([alpha]=one)
+    local stderr_file="$TEST_TMPDIR/array-kind-validation.err"
+    local status
+
+    shopt -s nocasematch
+    if __base_bash_libs_std_validate_array_kind__ base_std_test a associative_values 2>"$stderr_file"; then
+        status=0
+    else
+        status=$?
+    fi
+    shopt -u nocasematch
+
+    [ "$status" -eq 1 ]
+    [[ "$(cat "$stderr_file")" == *"must be a caller-declared indexed array."* ]]
 }
 
 @test "base_std_assert_associative_array accepts declared associative arrays" {
@@ -4518,6 +4855,31 @@ EOF
     [ "$status" -eq 8 ]
     [[ "$output" == *"decimal exit code"* ]]
     [[ "$output" != *"value too great for base"* ]]
+}
+
+@test "integer range validation rejects machine overflow before arithmetic conversion" {
+    local script="$TEST_TMPDIR/assert-overflowing-integer.sh"
+
+    create_script "$script" <<EOF
+#!/usr/bin/env bash
+source "$STDLIB_PATH"
+value=18446744073709551617
+base_std_assert_integer_range value 1 10
+EOF
+
+    bats_run bash "$script"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"outside the supported integer range"* ]]
+    [[ "$output" != *"value too great for base"* ]]
+}
+
+@test "integer range validation accepts signed 64-bit boundaries" {
+    local minimum=-9223372036854775808
+    local maximum=9223372036854775807
+
+    base_std_assert_integer_range minimum -9223372036854775808 0
+    base_std_assert_integer_range maximum 0 9223372036854775807
 }
 
 @test "integer ranges reject inverted bounds" {
@@ -4752,7 +5114,7 @@ EOF
     bats_run bash "$script"
 
     [ "$status" -eq 0 ]
-    [[ "$output" == *"base_std_get_my_source_dir: result variable name must be a valid Bash variable name"* ]]
+    [[ "$output" == *"base_std_get_my_source_dir: one or more variable names are invalid"* ]]
     [[ "$output" != *"invalid variable name"* ]]
     [[ "$output" == *"after"* ]]
 }
@@ -4856,6 +5218,55 @@ EOF
     [[ "$normalized" == *"answer=yes"* ]]
     [[ "$normalized" == *"stdin=n"* ]]
     [[ "$normalized" == *"payload"* ]]
+}
+
+@test "base_std_ask_yes_no accepts a caller-owned input fd and leaves it open" {
+    local input_file="$TEST_TMPDIR/ask-fd-input"
+    local script="$TEST_TMPDIR/ask-fd.sh"
+
+    printf 'yn' > "$input_file"
+    create_script "$script" <<EOF
+#!/usr/bin/env bash
+source "$STDLIB_PATH"
+exec 9< "\$1"
+if base_std_ask_yes_no "First" no 9; then
+    first=yes
+else
+    first=no
+fi
+if base_std_ask_yes_no "Second" no 9; then
+    second=yes
+else
+    second=no
+fi
+if : <&9; then
+    fd=open
+else
+    fd=closed
+fi
+printf 'first=%s second=%s fd=%s\n' "\$first" "\$second" "\$fd"
+EOF
+
+    bats_run bash "$script" "$input_file"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"First [y/N]:"* ]]
+    [[ "$output" == *"Second [y/N]:"* ]]
+    [[ "$output" == *"first=yes second=no fd=open"* ]]
+}
+
+@test "base_std_ask_yes_no validates an injected input fd" {
+    local stderr_file="$TEST_TMPDIR/ask-input-fd.err"
+    local rc
+
+    if base_std_ask_yes_no "Proceed" no invalid 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+
+    [ "$rc" -eq 2 ]
+    [[ "$(cat "$stderr_file")" == *"base_std_ask_yes_no: input_fd must be a non-negative integer."* ]]
 }
 
 @test "base_std_ask_yes_no validates argument count" {
