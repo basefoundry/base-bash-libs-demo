@@ -7,6 +7,11 @@ The repository Project follows the issue-backed pull-request workflow.
 - An open issue starts with the normal issue-intake status, `Backlog`.
 - Opening, reopening, or preparing a pull request moves its tracked issue to
   `In Progress`.
+- This repository intentionally keeps an open pull request in `In Progress`;
+  its Project Intake workflow does not use `In Review`. The sibling
+  `base-bash-libs` contributor guidance uses `In Review` for open PRs, so do not
+  copy that status rule into this Project without changing this repository's
+  workflow and its contract tests together.
 - Closing a pull request without merging returns the issue to `Ready`.
 - Merging a pull request moves the issue to `Done`.
 

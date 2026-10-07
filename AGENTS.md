@@ -27,7 +27,10 @@ precedence over this baseline.
 
 5. Keep the pull request scoped to the issue and link it with
    `Fixes #<issue>` or `Closes #<issue>` when merge should close the issue.
-6. Preserve existing user changes. Do not overwrite project-owned files unless
+6. Move a tracked issue to `In Progress` before branch work and leave it there
+   while its pull request is open. This repository does not use `In Review`;
+   merge maps to `Done` and an unmerged closure maps to `Ready`.
+7. Preserve existing user changes. Do not overwrite project-owned files unless
    the user explicitly asks for that edit.
 
 ## Validation
