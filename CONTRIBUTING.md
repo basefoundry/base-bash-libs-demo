@@ -58,3 +58,8 @@ Because `test.requirements` contributes to the manifest trust identity, adding o
 changing that file makes existing `basectl trust allow` approvals stale. Review
 the new dependency and re-run the suggested trust approval command before
 running `basectl test`.
+
+Before merging release-preparation work, confirm the exact
+`Required consumer and artifact validation` aggregate described in
+[`docs/ci-required-checks.md`](docs/ci-required-checks.md) is green and is the
+required repository gate for the pull request.
