@@ -60,19 +60,19 @@ diff -r /tmp/beacon-release-a /tmp/beacon-release-b
 
 The directory contains:
 
-Timestamps are fixed at 1980-01-01 00:00:00 UTC regardless of the caller's
-timezone. CI compares the complete four-asset set built under UTC and
-Asia/Kolkata. Filename ordering uses `LC_ALL=C`; payload filenames are
-repository-controlled. Reproducibility is checked within each supported toolchain
-(GNU tar on Ubuntu, BSD tar on macOS), not promised byte-for-byte across different
-tar implementations or versions. Existing published assets are never replaced.
-
 - `beacon-vX.Y.Z.tar.gz`, the standalone Beacon application, fixtures, and
   verified vendored Base Bash package;
 - `beacon-vX.Y.Z.SHA256SUMS`, covering the archive and both JSON documents;
 - `beacon-vX.Y.Z.spdx.json`, recording Beacon and framework package identity;
 - `beacon-vX.Y.Z.provenance.json`, binding the archive to the clean Beacon
   source commit and immutable Base Bash commit.
+
+Timestamps are fixed at 1980-01-01 00:00:00 UTC regardless of the caller's
+timezone. CI compares the complete four-asset set built under UTC and
+Asia/Kolkata. Filename ordering uses `LC_ALL=C`; payload filenames are
+repository-controlled. Reproducibility is checked within each supported toolchain
+(GNU tar on Ubuntu, BSD tar on macOS), not promised byte-for-byte across different
+tar implementations or versions. Existing published assets are never replaced.
 
 The default verifier never executes payload code. It rejects missing, extra,
 renamed, or modified assets; duplicate JSON keys; inconsistent SPDX inventories,
@@ -96,12 +96,20 @@ preparation tools: they never create a tag, GitHub Release, or network request.
 1. Create or choose a release issue and keep its Project metadata current.
 2. Create a release-preparation branch and dedicated worktree from
    `origin/main`.
-3. Update `VERSION`, the README release reference, and `CHANGELOG.md`.
-   Keep ordinary pull requests under `[Unreleased]`; only release-preparation
+3. Update `VERSION` and `CHANGELOG.md`. Beacon's README has no separate release
+   reference; do not add a synthetic one. For the first release, create the
+   dated `## [0.1.0] - YYYY-MM-DD` section from the relevant `[Unreleased]`
+   entries, then leave a fresh `[Unreleased]` heading for subsequent work.
+   Ordinary pull requests remain under `[Unreleased]`; only release-preparation
    work changes the published version.
-4. Run the repository validation command, `git diff --check`, and the
-   standalone artifact gate above. Review the generated SBOM, provenance, and
-   the release notes prepared from `docs/release-notes-template.md`.
+4. Read [`ci-required-checks.md`](ci-required-checks.md) and confirm the exact
+   `Required consumer and artifact validation` aggregate is green; it is the
+   intended release-preparation merge gate. [Issue #37](https://github.com/basefoundry/base-bash-libs-demo/issues/37)
+   tracks the separate ruleset update that will enforce this aggregate after
+   its exact context is configured and read back. Run the repository
+   validation command, `git diff --check`, and the standalone artifact gate
+   above. Review the generated SBOM, provenance, and release notes prepared from
+   `docs/release-notes-template.md`.
 5. Open and merge the release-preparation pull request.
 6. Sync local `main`, then inspect the release:
 

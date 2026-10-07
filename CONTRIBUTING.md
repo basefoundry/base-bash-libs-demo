@@ -58,3 +58,10 @@ Because `test.requirements` contributes to the manifest trust identity, adding o
 changing that file makes existing `basectl trust allow` approvals stale. Review
 the new dependency and re-run the suggested trust approval command before
 running `basectl test`.
+
+Before merging release-preparation work, confirm the exact
+`Required consumer and artifact validation` aggregate described in
+[`docs/ci-required-checks.md`](docs/ci-required-checks.md) is green. It is the
+intended repository gate for the pull request; [issue #37](https://github.com/basefoundry/base-bash-libs-demo/issues/37)
+tracks enabling it as an enforced required ruleset check after the exact
+context is configured and read back.

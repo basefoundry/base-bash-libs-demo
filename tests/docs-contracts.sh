@@ -53,6 +53,13 @@ done
 grep -Fq 'Scheduled runs cover both release rows' "$docs_contract_root/docs/framework-updates.md"
 grep -Fq 'leaving that input blank runs both rows' "$docs_contract_root/docs/framework-updates.md"
 grep -Fq 'v2.0.0 baseline and current supported v2.1.0' "$docs_contract_readme"
+grep -Fq "Beacon's README has no separate release" "$docs_contract_root/docs/release-process.md"
+grep -Fq '## [0.1.0] - YYYY-MM-DD' "$docs_contract_root/docs/release-process.md"
+grep -Fq 'Required consumer and artifact validation' "$docs_contract_root/docs/release-process.md"
+grep -Fq 'intended repository gate for the pull request' "$docs_contract_root/CONTRIBUTING.md"
+grep -Fq 'tracks enabling it as an enforced required ruleset check' "$docs_contract_root/CONTRIBUTING.md"
+grep -Fq 'intended release-preparation merge gate' "$docs_contract_root/docs/release-process.md"
+grep -Fq 'tracks the separate ruleset update' "$docs_contract_root/docs/release-process.md"
 
 for docs_contract_url in \
     'https://github.com/basefoundry/base-bash-libs' \
