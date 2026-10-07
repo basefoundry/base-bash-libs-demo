@@ -77,6 +77,8 @@ if grep -R -n -E 'base-bash-libs/blob/main/docs/(api-reference|v2/quickstart|REA
     exit 1
 fi
 grep -Fq 'v2.1.0' "$docs_contract_root/docs/use-in-your-project.md"
+# Keep these literals aligned with docs/use-in-your-project.md until issue #38
+# moves Beacon's vendored pin; update the assertions with that adoption change.
 grep -Fq 'issue #38' "$docs_contract_root/docs/use-in-your-project.md"
 
 for docs_contract_heading in \

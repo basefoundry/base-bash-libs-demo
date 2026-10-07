@@ -41,9 +41,10 @@ introduces.
 
 ## Runtime prerequisites
 
-Base Bash requires Bash 4.2.53 or newer. Linux environments commonly satisfy that
-requirement. macOS `/bin/bash` is 3.2, so supported macOS use requires a newer
-Bash such as Homebrew Bash. Beacon's launcher discovers that supported Bash,
+Base Bash enforces Bash 4.2 or newer; this repository is tested on Bash 4.2.53 or
+newer. Linux environments commonly satisfy that runtime boundary. macOS
+`/bin/bash` is 3.2, so supported macOS use requires a newer Bash such as
+Homebrew Bash. Beacon's launcher discovers that supported Bash,
 but it cannot remove the installation requirement.
 
 The application must also provide any external commands used by its own
