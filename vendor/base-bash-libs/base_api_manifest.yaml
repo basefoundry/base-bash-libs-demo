@@ -24,7 +24,7 @@ environment:
   - BASE_BASH_LIBS_LOG_DEBUG|caller-control|enable debug diagnostics
   - BASE_BASH_LIBS_LOG_UTC|caller-control|render log timestamps in UTC
   - BASE_BASH_LIBS_GIT_PULL_MAX_ATTEMPTS|caller-control|maximum git pull attempts
-  - NO_COLOR|caller-input|disable color output when set
+  - NO_COLOR|caller-input|disable automatic color output when set; explicit always mode overrides it
   - TMPDIR|caller-input|temporary directory policy
   - GH_TOKEN|caller-input|GitHub CLI authentication input
   - TZ|caller-input|caller-selected timezone for diagnostics
@@ -41,6 +41,7 @@ artifacts:
   - docs/single-file-distribution.md|documentation|single-file and deterministic bundle workflow
   - docs/vendor-workflow.md|documentation|offline vendor and standalone workflow
   - docs/v2-symbol-map.md|documentation|v2 migration and symbol map
+  - scripts/standalone-app-payloads.txt|runtime-manifest|shared generated-app and standalone payload allowlist
   - lib/bash/README.md|documentation|package layout and namespace contract
   - lib/bash/tests/test_helper.sh|test-support|shared BATS helpers
 
@@ -65,6 +66,23 @@ modules:
     stability: stable
     since: 2.0.0
     deprecated: false
+  - name: process
+    kind: sourceable-library
+    source: lib/bash/process/lib_process.sh
+    documentation: lib/bash/process/README.md
+    tests: lib/bash/process/tests/lib_process.bats
+    dependencies: std
+    optional_commands: ps,rm,sleep
+    artifacts: lib/bash/process/lib_process.sh,lib/bash/process/README.md,lib/bash/process/tests/lib_process.bats
+    public_symbols: base_process_owner_alive
+    signature_source: lib/bash/process/README.md
+    inputs: documented per symbol in the module README and API charter
+    outputs: documented per symbol; no caller-owned outputs
+    statuses: usage and contract errors return 2; a false owner relationship returns 1
+    side_effects: documented per symbol; sourcing is passive
+    stability: preview
+    since: 2.1.0
+    deprecated: false
   - name: file
     kind: sourceable-library
     source: lib/bash/file/lib_file.sh
@@ -87,7 +105,7 @@ modules:
     source: lib/bash/git/lib_git.sh
     documentation: lib/bash/git/README.md
     tests: lib/bash/git/tests/lib_git.bats
-    dependencies: std
+    dependencies: std,str
     optional_commands: git,awk,grep,mktemp,rm,sleep
     artifacts: lib/bash/git/lib_git.sh,lib/bash/git/README.md,lib/bash/git/tests/lib_git.bats
     public_symbols: base_git_branch_merged_to_ref,base_git_branch_upstream,base_git_check_script_up_to_date,base_git_detect_default_branch,base_git_get_current_branch,base_git_list_remote_branches,base_git_list_worktree_branches,base_git_update_repo,base_git_worktree_path_for_branch
@@ -105,6 +123,7 @@ modules:
     documentation: lib/bash/gh/README.md
     tests: lib/bash/gh/tests/lib_gh.bats
     dependencies: std
+    implementation_dependencies: process
     optional_commands: gh,awk,grep,mktemp,rm,sleep,timeout,gtimeout
     artifacts: lib/bash/gh/lib_gh.sh,lib/bash/gh/README.md,lib/bash/gh/tests/lib_gh.bats
     public_symbols: base_gh_api_with_retry,base_gh_auth_status_diagnostics,base_gh_infer_repo_from_origin,base_gh_repo_default_branch,base_gh_repo_from_remote_url,base_gh_report_command_failure,base_gh_require_cli,base_gh_run
@@ -189,7 +208,7 @@ modules:
     source: lib/bash/app/lib_app.sh
     documentation: lib/bash/app/README.md
     tests: lib/bash/app/tests/lib_app.bats
-    dependencies: std,cli
+    dependencies: std,cli,str
     optional_commands: none
     artifacts: lib/bash/app/lib_app.sh,lib/bash/app/README.md,lib/bash/app/tests/lib_app.bats
     public_symbols: base_app_add_standard_options,base_app_apply_standard_options,base_app_config_define,base_app_config_get,base_app_config_load,base_app_config_provenance,base_app_config_report,base_app_config_set_cli,base_app_hook,base_app_init,base_app_prompt,base_app_run,base_app_should_prompt,base_app_status

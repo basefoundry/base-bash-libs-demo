@@ -11,13 +11,17 @@ helpers are available.
 
 - `base_arg_parse <options_array> <positionals_array> <specs_array> -- [args...]`
   Parse exact flag, value, and repeatable options into caller-owned arrays.
-  Returns `0` on success, `1` for invalid caller-owned variable contracts, and
-  `2` for malformed specs, unknown options, or missing values; caller-owned
-  outputs are published only after a successful parse.
+  Returns `0` on success and `2` for invalid caller-owned variable contracts,
+  malformed specs, unknown options, or missing values. Validation never exits
+  the caller, and outputs are published only after a successful parse.
 
 The options, positionals, and specs arrays must have distinct names. Every
 repeatable option's output array must also be distinct from those three arrays.
 Aliasing is rejected before any caller-owned output is changed.
+The options output must be a caller-declared associative array; positionals
+and repeatable option outputs must be caller-declared indexed arrays. Arrays
+with integer or case-converting attributes, readonly outputs, and nameref
+outputs are rejected before parsing or publication.
 
 ## Usage
 

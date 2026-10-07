@@ -43,7 +43,7 @@ __base_bash_libs_arg_preflight_repeatable_names__() {
 
     while (($#)); do
         if [[ "${1#*|}" == repeatable\|* ]]; then
-            __base_bash_libs_std_assert_public_variable_names__ base_arg_parse "${1%%|*}" || return 1
+            __base_bash_libs_std_validate_variable_names__ base_arg_parse "${1%%|*}" || return 1
         fi
         shift
     done
@@ -95,14 +95,14 @@ __base_bash_libs_arg_parse_specs__() {
                 base_std_log_error -l base_bash_libs.arg "base_arg_parse: repeatable option spec '$__base_bash_libs_arg_name' requires an output array contract."
                 return 2
             fi
-            __base_bash_libs_std_assert_public_variable_names__ base_arg_parse "$__base_bash_libs_arg_name" || return 1
+            __base_bash_libs_std_validate_variable_names__ base_arg_parse "$__base_bash_libs_arg_name" || return 2
             __base_bash_libs_arg_assert_distinct_names__ \
-                "$__base_bash_libs_arg_options_name" "$__base_bash_libs_arg_positionals_name" "$__base_bash_libs_arg_caller_specs_name" "$__base_bash_libs_arg_name" || return 1
+                "$__base_bash_libs_arg_options_name" "$__base_bash_libs_arg_positionals_name" "$__base_bash_libs_arg_caller_specs_name" "$__base_bash_libs_arg_name" || return 2
             if ! __base_bash_libs_std_declares_array_kind__ "$__base_bash_libs_arg_name" "a"; then
                 base_std_log_error -l base_bash_libs.arg "base_arg_parse: repeatable option '$__base_bash_libs_arg_name' requires a caller-declared indexed array."
                 return 2
             fi
-            __base_bash_libs_std_assert_writable_output__ base_arg_parse "$__base_bash_libs_arg_name" || return 1
+            __base_bash_libs_std_assert_writable_output__ base_arg_parse "$__base_bash_libs_arg_name" indexed-array || return 2
             eval "$__base_bash_libs_arg_repeatable_names_name+=(\"\$__base_bash_libs_arg_name\")"
         fi
 
@@ -153,8 +153,8 @@ base_arg_parse() {
         base_std_log_error -l base_bash_libs.arg "base_arg_parse: usage: base_arg_parse <options_assoc> <positionals_array> <specs_array> -- [args...]"
         return 2
     fi
-    __base_bash_libs_std_assert_public_variable_names__ base_arg_parse "${1-}" "${2-}" "${3-}" || return 1
-    __base_bash_libs_arg_preflight_repeatable_names__ "$3" || return 1
+    __base_bash_libs_std_validate_variable_names__ base_arg_parse "${1-}" "${2-}" "${3-}" || return 2
+    __base_bash_libs_arg_preflight_repeatable_names__ "$3" || return 2
 
     local __base_bash_libs_arg_options_name="$1" __base_bash_libs_arg_positionals_name="$2" __base_bash_libs_arg_specs_name="$3"
     local __base_bash_libs_arg_current __base_bash_libs_arg_option_token __base_bash_libs_arg_option_value __base_bash_libs_arg_option_name __base_bash_libs_arg_option_kind
@@ -164,12 +164,11 @@ base_arg_parse() {
     local -A __base_bash_libs_arg_options=() __base_bash_libs_arg_token_kind=() __base_bash_libs_arg_token_name=()
     local __base_bash_libs_arg_parse_options=1
 
-    base_std_assert_variable_name "$__base_bash_libs_arg_options_name" "$__base_bash_libs_arg_positionals_name" "$__base_bash_libs_arg_specs_name"
-    __base_bash_libs_arg_assert_distinct_names__ "$__base_bash_libs_arg_options_name" "$__base_bash_libs_arg_positionals_name" "$__base_bash_libs_arg_specs_name" || return 1
-    base_std_assert_associative_array "$__base_bash_libs_arg_options_name"
-    base_std_assert_indexed_array "$__base_bash_libs_arg_positionals_name" "$__base_bash_libs_arg_specs_name"
-    __base_bash_libs_std_assert_writable_output__ base_arg_parse "$__base_bash_libs_arg_options_name" || return 1
-    __base_bash_libs_std_assert_writable_output__ base_arg_parse "$__base_bash_libs_arg_positionals_name" || return 1
+    __base_bash_libs_arg_assert_distinct_names__ "$__base_bash_libs_arg_options_name" "$__base_bash_libs_arg_positionals_name" "$__base_bash_libs_arg_specs_name" || return 2
+    __base_bash_libs_std_validate_array_kind__ base_arg_parse A "$__base_bash_libs_arg_options_name" || return 2
+    __base_bash_libs_std_validate_array_kind__ base_arg_parse a "$__base_bash_libs_arg_positionals_name" "$__base_bash_libs_arg_specs_name" || return 2
+    __base_bash_libs_std_assert_writable_output__ base_arg_parse "$__base_bash_libs_arg_options_name" associative-array || return 2
+    __base_bash_libs_std_assert_writable_output__ base_arg_parse "$__base_bash_libs_arg_positionals_name" indexed-array || return 2
 
     __base_bash_libs_arg_parse_specs__ "$__base_bash_libs_arg_specs_name" __base_bash_libs_arg_token_kind __base_bash_libs_arg_token_name __base_bash_libs_arg_repeatable_names \
         "$__base_bash_libs_arg_options_name" "$__base_bash_libs_arg_positionals_name" "$__base_bash_libs_arg_specs_name" || return $?

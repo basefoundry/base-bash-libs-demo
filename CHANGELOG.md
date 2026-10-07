@@ -11,7 +11,7 @@ and versions are tracked in the repo-root `VERSION` file.
 
 - Initialized the repository with the Base-managed repo baseline.
 - Added the Beacon offline support-bundle reference consumer.
-- Vendored and independently verified the canonical Base Bash v2.0.0 release.
+- Vendored and independently verified the canonical Base Bash v2.2.0 release.
 - Added Ubuntu, minimum Bash 4.2.53, and macOS Homebrew Bash validation.
 - Added explicit release/full-commit compatibility checks and a documented,
   atomic framework pin-update and rollback workflow.
@@ -37,6 +37,10 @@ and versions are tracked in the repo-root `VERSION` file.
   `In Progress`, including the `Ready` and `Done` transitions.
 - Added the required consumer-and-artifact aggregate as the explicit release
   preparation merge gate.
+- Adopted the published Base Bash v2.2.0 release at commit
+  `d8894bf4453e6b6beaa6de7ce2e082497cb236f2`; the lock, vendored package,
+  release evidence, compatibility rows, and onboarding docs now agree on that
+  immutable framework pin.
 
 ### Fixed
 

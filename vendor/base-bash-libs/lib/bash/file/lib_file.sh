@@ -73,17 +73,27 @@ __base_bash_libs_file_mode__() {
 }
 
 __base_bash_libs_file_fingerprint__() {
-    local result_name="$1" file_path="$2" fingerprint
+    local result_name="$1" file_path="$2" fingerprint content_hash
 
     if fingerprint="$(stat -c '%d:%i:%s:%Y:%Z' -- "$file_path" 2> /dev/null)"; then
-        printf -v "$result_name" '%s' "$fingerprint"
-        return 0
+        :
+    elif ! fingerprint="$(stat -f '%d:%i:%z:%m:%c' -- "$file_path" 2> /dev/null)"; then
+        return 1
     fi
-    if fingerprint="$(stat -f '%d:%i:%z:%m:%c' -- "$file_path" 2> /dev/null)"; then
-        printf -v "$result_name" '%s' "$fingerprint"
-        return 0
+
+    # Filesystems differ in timestamp precision (notably macOS/BSD stat), so
+    # metadata alone can miss a same-size rewrite in the same clock tick.
+    # Include a content digest to make the optimistic commit check resistant to
+    # that race while retaining the inexpensive stat identity fields above.
+    if command -v sha256sum > /dev/null 2>&1; then
+        content_hash="$(sha256sum -- "$file_path" | awk '{print $1}')" || return 1
+    elif command -v shasum > /dev/null 2>&1; then
+        content_hash="$(shasum -a 256 -- "$file_path" | awk '{print $1}')" || return 1
+    else
+        return 1
     fi
-    return 1
+    [[ "$content_hash" =~ ^[[:xdigit:]]{64}$ ]] || return 1
+    printf -v "$result_name" '%s:%s' "$fingerprint" "$content_hash"
 }
 
 __base_bash_libs_file_commit_temp__() {
@@ -393,7 +403,7 @@ base_file_update_file_section() {
         else
             base_std_log_info -l base_bash_libs.file "Usage: base_file_update_file_section <target_file> <beginning_marker> <end_marker> [new_lines...]"
         fi
-        return 1
+        return 2
     fi
 
     local target_file="$1" beginning_marker="$2" end_marker="$3"
@@ -402,14 +412,14 @@ base_file_update_file_section() {
         if [[ $# -gt 0 ]]; then
             base_std_log_error -l base_bash_libs.file "When -r flag is used, no content arguments should be provided."
             base_std_log_info -l base_bash_libs.file "Usage: base_file_update_file_section -r <target_file> <beginning_marker> <end_marker>"
-            return 1
+            return 2
         fi
     else
         new_content_array=("$@") # Capture remaining arguments as new_lines
     fi
 
     __base_bash_libs_file_literal_path__ target_file "$target_file"
-    __base_bash_libs_file_validate_markers__ "$beginning_marker" "$end_marker" || return 1
+    __base_bash_libs_file_validate_markers__ "$beginning_marker" "$end_marker" || return $?
     if [[ ! -f "$target_file" ]]; then
         base_std_log_debug -l base_bash_libs.file "Target file '$target_file' does not exist."
         return 0

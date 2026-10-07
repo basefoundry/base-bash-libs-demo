@@ -25,8 +25,8 @@ manifest verification through the candidate launcher and public library root.
 It does not modify `vendor/base-bash-libs` or `base-bash-libs.lock`.
 
 The `Framework Compatibility` workflow performs the same check on Ubuntu and
-macOS. Its matrix defaults to the immutable `v2.0.0` baseline and current
-supported `v2.1.0` release. Scheduled runs cover both release rows; a manual
+macOS. Its matrix defaults to the immutable `v2.0.0` rollback baseline and current
+supported `v2.2.0` release. Scheduled runs cover both release rows; a manual
 `framework_ref` tests only the explicit release tag or 40-character commit, and
 leaving that input blank runs both rows. Branch names are rejected. Release
 tags are resolved via their explicit `refs/tags/` namespace (including
@@ -66,6 +66,6 @@ Revert the complete dependency-update pull request so the vendor tree, lock,
 release evidence, and changelog move back together. Run the same local and
 hosted gates against the restored pin. Do not repair a failed update by copying
 individual library files from an older package.
-This compatibility coverage does not change the committed v2.0.0 vendor pin.
-Advance the current-release row deliberately when a new supported release is
-adopted for compatibility testing.
+The committed vendor pin is v2.2.0. Keep the v2.0.0 row as the rollback
+baseline, and advance the current-release row deliberately when a new supported
+release is adopted for compatibility testing.

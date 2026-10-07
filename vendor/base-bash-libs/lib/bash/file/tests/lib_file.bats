@@ -110,18 +110,19 @@ source "$BASE_BASH_DIR/std/lib_std.sh"
 declare -a app_args=()
 base_init app_args --source "\${BASH_SOURCE[0]}" -- "\$@"
 source "$BASE_BASH_DIR/file/lib_file.sh"
-base_file_update_file_section
+if base_file_update_file_section; then status=0; else status=\$?; fi
 printf 'after\n'
+exit "\$status"
 EOF
     chmod +x "$script"
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 2 ]
     [[ "$output" == *"Insufficient arguments."* ]]
     [[ "$output" == *"Usage: base_file_update_file_section"* ]]
     [[ "$output" != *"unbound variable"* ]]
-    [[ "$output" != *"after"* ]]
+    [[ "$output" == *"after"* ]]
 }
 
 @test "base_file_update_file_section accepts empty content under strict options" {
@@ -232,7 +233,9 @@ EOF
     printf 'before\n# BEGIN\nold\n# END\nafter\n' > "$target"
     eval "$(declare -f __base_bash_libs_file_commit_temp__ | sed '1s/__base_bash_libs_file_commit_temp__/__orig_base_bash_libs_file_commit_temp__/')"
     __base_bash_libs_file_commit_temp__() {
-        printf 'writer-won\n' > "$target"
+        # Keep the replacement the same size so coarse timestamp/size
+        # fingerprints cannot distinguish this concurrent rewrite.
+        printf 'before\n# BEGIN\nnew\n# END\nafter\n' > "$target"
         __orig_base_bash_libs_file_commit_temp__ "$@"
     }
 
@@ -244,7 +247,7 @@ EOF
 
     unset -f __base_bash_libs_file_commit_temp__ __orig_base_bash_libs_file_commit_temp__
     [ "$status" -eq 6 ]
-    [ "$(cat "$target")" = "writer-won" ]
+    [ "$(cat "$target")" = $'before\n# BEGIN\nnew\n# END\nafter' ]
     [[ "$(cat "$stderr_file")" == *"Concurrent modification detected"* ]]
 }
 
@@ -421,7 +424,7 @@ EOF
     [ "$status" -eq 2 ]
 
     capture_command base_file_update_file_section "$target" "# BEGIN" $'# END\nextra' "new"
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 2 ]
     [ "$(cat "$target")" = $'plain\ncontent' ]
 }
 
@@ -622,7 +625,7 @@ EOF
 
     bats_run base_file_update_file_section -r "$target" "# BEGIN" "# END" "unexpected"
 
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 2 ]
     [[ "$output" == *"When -r flag is used"* ]]
 }
 

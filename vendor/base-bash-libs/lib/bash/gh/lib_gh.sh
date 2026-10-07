@@ -8,6 +8,10 @@ if [[ "${BASE_BASH_LIBS_STDLIB_LOADED:-}" != "1" ]]; then
     printf '%s\n' "Error: lib_gh.sh requires lib_std.sh to be sourced first." >&2
     return 1 2> /dev/null || exit 1
 fi
+if ! base_std_import process/lib_process.sh; then
+    printf '%s\n' "Error: lib_gh.sh could not load its process dependency." >&2
+    return 1 2> /dev/null || exit 1
+fi
 readonly BASE_BASH_LIBS_GH_LOADED=1
 
 # Public callers may provide the optional install hint even though internal
@@ -269,7 +273,7 @@ base_gh_repo_from_remote_url() {
         base_std_log_error -l base_bash_libs.gh "Usage: base_gh_repo_from_remote_url <remote_url> <result_variable_name>"
         return 2
     fi
-    __base_bash_libs_std_assert_public_variable_names__ base_gh_repo_from_remote_url "${2-}" || return 2
+    __base_bash_libs_std_validate_variable_names__ base_gh_repo_from_remote_url "${2-}" || return 2
 
     local __base_bash_libs_gh_remote_url="$1"
     local __base_bash_libs_gh_result_name="$2"
@@ -279,8 +283,7 @@ base_gh_repo_from_remote_url() {
         base_std_log_error -l base_bash_libs.gh "Usage: base_gh_repo_from_remote_url <remote_url> <result_variable_name>"
         return 2
     fi
-    base_std_assert_variable_name "$__base_bash_libs_gh_result_name" || return 2
-    __base_bash_libs_std_assert_writable_output__ base_gh_repo_from_remote_url "$__base_bash_libs_gh_result_name" || return 2
+    __base_bash_libs_std_assert_writable_output__ base_gh_repo_from_remote_url "$__base_bash_libs_gh_result_name" scalar || return 2
 
     __base_bash_libs_gh_parse_repo_from_remote_url__ "$__base_bash_libs_gh_remote_url" __base_bash_libs_gh_parsed_repo || return 2
     printf -v "$__base_bash_libs_gh_result_name" '%s' "$__base_bash_libs_gh_parsed_repo"
@@ -291,7 +294,7 @@ base_gh_infer_repo_from_origin() {
         base_std_log_error -l base_bash_libs.gh "Usage: base_gh_infer_repo_from_origin <repo_dir> <result_variable_name> [--optional]"
         return 2
     fi
-    __base_bash_libs_std_assert_public_variable_names__ base_gh_infer_repo_from_origin "${2-}" || return 2
+    __base_bash_libs_std_validate_variable_names__ base_gh_infer_repo_from_origin "${2-}" || return 2
 
     local __base_bash_libs_gh_infer_repo_dir="$1"
     local __base_bash_libs_gh_infer_result_name="$2"
@@ -302,8 +305,7 @@ base_gh_infer_repo_from_origin() {
         base_std_log_error -l base_bash_libs.gh "Usage: base_gh_infer_repo_from_origin <repo_dir> <result_variable_name> [--optional]"
         return 2
     fi
-    base_std_assert_variable_name "$__base_bash_libs_gh_infer_result_name" || return 2
-    __base_bash_libs_std_assert_writable_output__ base_gh_infer_repo_from_origin "$__base_bash_libs_gh_infer_result_name" || return 2
+    __base_bash_libs_std_assert_writable_output__ base_gh_infer_repo_from_origin "$__base_bash_libs_gh_infer_result_name" scalar || return 2
 
     if [[ "${3:-}" == "--optional" ]]; then
         __base_bash_libs_gh_infer_optional=1
@@ -328,7 +330,7 @@ base_gh_repo_default_branch() {
         base_std_log_error -l base_bash_libs.gh "Usage: base_gh_repo_default_branch <owner/repo> <result_variable_name>"
         return 2
     fi
-    __base_bash_libs_std_assert_public_variable_names__ base_gh_repo_default_branch "${2-}" || return 2
+    __base_bash_libs_std_validate_variable_names__ base_gh_repo_default_branch "${2-}" || return 2
 
     local __base_bash_libs_gh_repo="$1"
     local __base_bash_libs_gh_repo_result_name="$2"
@@ -338,8 +340,7 @@ base_gh_repo_default_branch() {
         base_std_log_error -l base_bash_libs.gh "Usage: base_gh_repo_default_branch <owner/repo> <result_variable_name>"
         return 2
     fi
-    base_std_assert_variable_name "$__base_bash_libs_gh_repo_result_name" || return 2
-    __base_bash_libs_std_assert_writable_output__ base_gh_repo_default_branch "$__base_bash_libs_gh_repo_result_name" || return 2
+    __base_bash_libs_std_assert_writable_output__ base_gh_repo_default_branch "$__base_bash_libs_gh_repo_result_name" scalar || return 2
 
     base_gh_require_cli || return 1
     __base_bash_libs_gh_repo_default_branch="$(gh repo view "$__base_bash_libs_gh_repo" --json defaultBranchRef --jq .defaultBranchRef.name 2> /dev/null)" || __base_bash_libs_gh_repo_status=$?
@@ -834,6 +835,19 @@ __base_bash_libs_gh_api_can_inject_include__() {
     printf -v "$__base_bash_libs_gh_inject_result_name" '%s' "$__base_bash_libs_gh_inject_value"
 }
 
+__base_bash_libs_gh_api_forced_terminal_env__() {
+    local result_name="$1" result=""
+
+    if [[ -n "${GH_FORCE_TTY-}" ]]; then
+        result=GH_FORCE_TTY
+    elif [[ -n "${CLICOLOR_FORCE-}" ]]; then
+        result=CLICOLOR_FORCE
+    elif [[ -n "${FORCE_COLOR-}" ]]; then
+        result=FORCE_COLOR
+    fi
+    printf -v "$result_name" '%s' "$result"
+}
+
 __base_bash_libs_gh_api_unstructured_transport_is_safe__() {
     local __base_bash_libs_gh_transport_result_name="$1" __base_bash_libs_gh_transport_value=1
     local __base_bash_libs_gh_transport_token
@@ -946,7 +960,7 @@ __base_bash_libs_gh_api_call_hook__() {
     # shellcheck disable=SC2034 # Deliberate dynamic-scope collision shields.
     local __base_bash_libs_gh_api_can_inject __base_bash_libs_gh_api_transport_syntax_safe __base_bash_libs_gh_api_transport_allowed
     # shellcheck disable=SC2034 # Deliberate dynamic-scope collision shields.
-    local __base_bash_libs_gh_api_structured_metadata __base_bash_libs_gh_api_metadata_include
+    local __base_bash_libs_gh_api_structured_metadata __base_bash_libs_gh_api_metadata_include __base_bash_libs_gh_api_forced_terminal_env
     # shellcheck disable=SC2034 # Deliberate dynamic-scope collision shields.
     local __base_bash_libs_gh_api_probe_status __base_bash_libs_gh_api_probe_retry
     # shellcheck disable=SC2034 # Deliberate dynamic-scope collision shields.
@@ -1404,97 +1418,33 @@ __base_bash_libs_gh_api_cleanup_workspace__() {
     command rmdir -- "$__base_bash_libs_gh_workspace_dir" 2> /dev/null || true
 }
 
+__base_bash_libs_gh_api_guardian_cleanup__() {
+    local __base_bash_libs_gh_guardian_reason="${1-}"
+    local __base_bash_libs_gh_guardian_workspace="${2-}"
+
+    # The process guardian removes its FIFO and readiness marker first, then
+    # this adapter removes the capture files and containing workspace.
+    : "$__base_bash_libs_gh_guardian_reason"
+    __base_bash_libs_gh_api_cleanup_workspace__ \
+        "$__base_bash_libs_gh_guardian_workspace"
+}
+
 __base_bash_libs_gh_api_start_capture_guardian__() {
     local __base_bash_libs_gh_guard_pid_name="$1" __base_bash_libs_gh_guard_fd_name="$2"
     local __base_bash_libs_gh_guard_owner_pid="$3" __base_bash_libs_gh_guard_workspace="$4"
-    local __base_bash_libs_gh_guard_pid __base_bash_libs_gh_guard_fd __base_bash_libs_gh_guard_monitor_was_enabled=0
-    local __base_bash_libs_gh_guard_probe
 
-    if ! exec {__base_bash_libs_gh_guard_fd}<> "$__base_bash_libs_gh_guard_workspace/guardian"; then
-        return 1
-    fi
-    [[ $- == *m* ]] && __base_bash_libs_gh_guard_monitor_was_enabled=1
-    set +m
-    (
-        local __base_bash_libs_gh_guard_command="" __base_bash_libs_gh_guard_read_fd __base_bash_libs_gh_guard_read_status=0
-        local __base_bash_libs_gh_guard_parent_pid="" __base_bash_libs_gh_guard_self_pid="$BASHPID"
-        trap - EXIT
-        trap '' HUP INT QUIT TERM
-        # Descendants of the owner can inherit its FIFO descriptor. The
-        # guardian therefore combines the normal stop/EOF channel with the
-        # actual parent relationship reported for its own BASHPID. A recycled
-        # owner PID cannot impersonate that relationship after reparenting.
-        exec {__base_bash_libs_gh_guard_fd}>&-
-        if ! exec {__base_bash_libs_gh_guard_read_fd}< "$__base_bash_libs_gh_guard_workspace/guardian"; then
-            __base_bash_libs_gh_api_cleanup_workspace__ "$__base_bash_libs_gh_guard_workspace"
-            exit 1
-        fi
-        : > "$__base_bash_libs_gh_guard_workspace/guardian.ready" || exit 1
-        while :; do
-            if IFS= read -r -t 1 -u "$__base_bash_libs_gh_guard_read_fd" __base_bash_libs_gh_guard_command; then
-                break
-            else
-                __base_bash_libs_gh_guard_read_status=$?
-            fi
-            # EOF or a descriptor error means that no usable owner control
-            # channel remains. A timeout is the only reason to keep polling.
-            ((__base_bash_libs_gh_guard_read_status > 128)) || break
-            __base_bash_libs_gh_guard_parent_pid=""
-            if [[ -x /bin/ps ]]; then
-                __base_bash_libs_gh_guard_parent_pid="$(
-                    LC_ALL=C /bin/ps -o ppid= -p "$__base_bash_libs_gh_guard_self_pid" 2> /dev/null
-                )" || __base_bash_libs_gh_guard_parent_pid=""
-            else
-                __base_bash_libs_gh_guard_parent_pid="$(
-                    LC_ALL=C command ps -o ppid= -p "$__base_bash_libs_gh_guard_self_pid" 2> /dev/null
-                )" || __base_bash_libs_gh_guard_parent_pid=""
-            fi
-            __base_bash_libs_gh_guard_parent_pid="${__base_bash_libs_gh_guard_parent_pid//[[:space:]]/}"
-            if [[ "$__base_bash_libs_gh_guard_parent_pid" =~ ^[1-9][0-9]*$ ]]; then
-                [[ "$__base_bash_libs_gh_guard_parent_pid" == "$__base_bash_libs_gh_guard_owner_pid" ]] || break
-            elif ! kill -0 "$__base_bash_libs_gh_guard_owner_pid" 2> /dev/null; then
-                break
-            fi
-        done
-        __base_bash_libs_gh_api_cleanup_workspace__ "$__base_bash_libs_gh_guard_workspace"
-    ) < /dev/null > /dev/null 2>&1 &
-    __base_bash_libs_gh_guard_pid=$!
-    if ((__base_bash_libs_gh_guard_monitor_was_enabled)); then
-        set -m
-    else
-        set +m
-    fi
-    for ((__base_bash_libs_gh_guard_probe = 0; __base_bash_libs_gh_guard_probe < 100; __base_bash_libs_gh_guard_probe++)); do
-        [[ -e "$__base_bash_libs_gh_guard_workspace/guardian.ready" ]] && break
-        kill -0 "$__base_bash_libs_gh_guard_pid" 2> /dev/null || break
-        __base_bash_libs_std_sleep_interval__ 0.01 || break
-    done
-    if [[ ! -e "$__base_bash_libs_gh_guard_workspace/guardian.ready" ]]; then
-        kill -KILL "$__base_bash_libs_gh_guard_pid" 2> /dev/null || true
-        wait "$__base_bash_libs_gh_guard_pid" 2> /dev/null || true
-        exec {__base_bash_libs_gh_guard_fd}>&-
-        return 1
-    fi
-    printf -v "$__base_bash_libs_gh_guard_pid_name" '%s' "$__base_bash_libs_gh_guard_pid"
-    printf -v "$__base_bash_libs_gh_guard_fd_name" '%s' "$__base_bash_libs_gh_guard_fd"
+    __base_bash_libs_process_start_owner_guardian__ \
+        "$__base_bash_libs_gh_guard_pid_name" \
+        "$__base_bash_libs_gh_guard_fd_name" \
+        "$__base_bash_libs_gh_guard_owner_pid" \
+        "$__base_bash_libs_gh_guard_workspace/guardian" \
+        "$__base_bash_libs_gh_guard_workspace/guardian.ready" \
+        __base_bash_libs_gh_api_guardian_cleanup__ \
+        "$__base_bash_libs_gh_guard_workspace"
 }
 
 __base_bash_libs_gh_api_stop_capture_guardian__() {
-    local __base_bash_libs_gh_guard_pid="${1-}" __base_bash_libs_gh_guard_fd="${2-}"
-
-    if [[ "$__base_bash_libs_gh_guard_fd" =~ ^[1-9][0-9]*$ ]]; then
-        { printf 'stop\n' 1>&"$__base_bash_libs_gh_guard_fd"; } 2> /dev/null || true
-        exec {__base_bash_libs_gh_guard_fd}>&-
-    fi
-    if [[ "$__base_bash_libs_gh_guard_pid" =~ ^[1-9][0-9]*$ ]]; then
-        # `wait` can reap only this shell's child, so a guardian that has
-        # already exited can never turn a recycled PID into a signal target.
-        while kill -0 "$__base_bash_libs_gh_guard_pid" 2> /dev/null; do
-            wait "$__base_bash_libs_gh_guard_pid" 2> /dev/null && break
-            kill -0 "$__base_bash_libs_gh_guard_pid" 2> /dev/null || break
-        done
-        wait "$__base_bash_libs_gh_guard_pid" 2> /dev/null || true
-    fi
+    __base_bash_libs_process_stop_owner_guardian__ "$@"
 }
 
 __base_bash_libs_gh_api_trap_is_ignored__() {
@@ -1593,6 +1543,7 @@ __base_bash_libs_gh_api_with_retry_impl__() {
     local __base_bash_libs_gh_api_suppress_stdout=0 __base_bash_libs_gh_api_can_inject=0
     local __base_bash_libs_gh_api_transport_syntax_safe=0 __base_bash_libs_gh_api_transport_allowed=0
     local __base_bash_libs_gh_api_structured_metadata=1 __base_bash_libs_gh_api_metadata_include=0
+    local __base_bash_libs_gh_api_forced_terminal_env=""
     local __base_bash_libs_gh_api_stdout="" __base_bash_libs_gh_api_stderr="" __base_bash_libs_gh_api_display=""
     local __base_bash_libs_gh_api_capture_workspace=""
     local __base_bash_libs_gh_api_timeout_path="" __base_bash_libs_gh_api_attempt=1 __base_bash_libs_gh_api_status=0
@@ -1638,6 +1589,7 @@ __base_bash_libs_gh_api_with_retry_impl__() {
     esac
 
     __base_bash_libs_gh_api_attempt_argv=("$@")
+    __base_bash_libs_gh_api_forced_terminal_env__ __base_bash_libs_gh_api_forced_terminal_env
     if ((__base_bash_libs_gh_api_retry_authorized && !__base_bash_libs_gh_api_include && !__base_bash_libs_gh_api_ambiguous)); then
         __base_bash_libs_gh_api_can_inject_include__ __base_bash_libs_gh_api_can_inject "$@"
         if ((__base_bash_libs_gh_api_can_inject)); then
@@ -1648,8 +1600,11 @@ __base_bash_libs_gh_api_with_retry_impl__() {
     fi
     __base_bash_libs_gh_api_unstructured_transport_is_safe__ __base_bash_libs_gh_api_transport_syntax_safe "$@"
     ((__base_bash_libs_gh_api_ambiguous == 0)) || __base_bash_libs_gh_api_transport_syntax_safe=0
-    [[ -z "${GH_FORCE_TTY-}${CLICOLOR_FORCE-}${FORCE_COLOR-}" ]] ||
+    if [[ -n "$__base_bash_libs_gh_api_forced_terminal_env" ]]; then
         __base_bash_libs_gh_api_structured_metadata=0
+        base_std_log_warn -l base_bash_libs.gh \
+            "base_gh_api_with_retry: $__base_bash_libs_gh_api_forced_terminal_env is set; structured retry metadata is unavailable."
+    fi
 
     if ((__base_bash_libs_gh_api_sensitive)); then
         if ! __base_bash_libs_std_render_command_display__ __base_bash_libs_gh_api_display 1 "$__base_bash_libs_gh_api_safe_display" \

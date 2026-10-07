@@ -93,9 +93,9 @@ command and failure path before standardizing a team on any option.
 ## Maturity and support
 
 Base Bash is on the stable v2 API line and publishes immutable release assets,
-checksums, an SPDX SBOM, and provenance. Beacon deliberately remains pinned to
-v2.0.0 even when newer compatible v2 releases exist; an upstream release does
-not silently change this application.
+checksums, an SPDX SBOM, and provenance. Beacon deliberately pins the reviewed
+v2.2.0 release; a newer compatible upstream release does not silently change
+this application.
 
 Evidence is still narrower than broad ecosystem adoption. Beacon and the other
 listed Base Foundry integrations are first-party compatibility evidence, not

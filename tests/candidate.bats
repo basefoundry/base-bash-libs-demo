@@ -21,8 +21,8 @@ teardown() {
     for command in plan collect verify; do
         run env TMPDIR="$TEST_ROOT/temp" BEACON_BROKEN_COMMAND="$command" \
             BEACON_REAL_LAUNCHER="$REPO_ROOT/vendor/base-bash-libs/bin/base-bash" \
-            "$REPO_ROOT/tests/candidate-smoke.sh" "$TEST_ROOT/candidate" 2.0.0 \
-            b4243765726c133499feeabdc50154f99c0fec12
+            "$REPO_ROOT/tests/candidate-smoke.sh" "$TEST_ROOT/candidate" 2.2.0 \
+            d8894bf4453e6b6beaa6de7ce2e082497cb236f2
         [ "$status" -eq 1 ]
         [[ "$output" == *"returned 42"* ]]
         [[ "$output" != *passed.* ]]

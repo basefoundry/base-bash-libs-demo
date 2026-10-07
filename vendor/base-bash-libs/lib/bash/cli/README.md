@@ -27,12 +27,17 @@ metadata in one source of truth. It is one sourceable file and requires
   [conflicts=A,B] [sensitive=true|false] [hidden=true|false]` declares a
   `flag`, single `value`, or `repeatable` option. Tokens are exact `-x` or
   `--long` spellings; long options also accept `--long=value` for value kinds.
+  A flag never accepts an attached value: both `--flag=` and
+  `--flag=value` are usage errors.
   Conflict names must refer to options already declared on the same or an
   ancestor command. Sensitive defaults are redacted in generated help.
 - `base_cli_positional MODEL PATH NAME [required=true|false]
   [repeatable=true|false] [default=VALUE] [enum=A,B] [validator=FUNCTION]
   [help=TEXT] [metavar=NAME]` declares a positional argument. A repeatable
-  positional must be the final positional in its command.
+  positional must be the final positional in its command. If it has a default,
+  that value is used and validated when no values are supplied. An explicitly
+  supplied empty value counts as input and does not select the default; a
+  default satisfies `required=true` when the caller omits the positional.
 - `base_cli_help MODEL [PATH]` renders deterministic help to stdout.
 - `base_cli_parse MODEL -- [ARGV...]` parses and validates an invocation. It
   returns `0` on success, `2` for usage/validation errors, and publishes the
@@ -48,6 +53,10 @@ metadata in one source of truth. It is one sourceable file and requires
   `base_cli_result_count KEY RESULT_VARIABLE` copy parsed values into
   caller-owned variables without command substitution.
 
+Positional result indexes use decimal digits, accept leading zeros, and are
+range-checked before Bash arithmetic or array subscripting. Out-of-range and
+very large indexes return `1` without changing the destination variable.
+
 ## Result contract
 
 After a successful run parse:
@@ -61,8 +70,22 @@ After a successful run parse:
 - `BASE_BASH_LIBS_CLI_RESULT_MODEL`, `..._COMMAND`, and `..._ACTION` identify
   the model, canonical command path, and `run`, `help`, or `version` action.
 
+Flag defaults are validated against `true`, `false`, `yes`, `no`, `1`, and `0`
+and are kept in that spelling in the result map. Conflict validation uses the
+effective boolean value: `true`, `yes`, and `1` enable a flag; `false`, `no`,
+and `0` leave it inactive. An explicitly supplied flag is enabled and therefore
+conflicts with another active option. This applies equally to ancestor and
+subcommand options.
+
 Results are valid after a successful parse. A failed parse returns status `2`
 and may have partially inspected input, but does not claim a valid result.
+
+Parsing treats a standalone `--` as the end of options and command/alias
+resolution; every following word is positional data, including a command name,
+alias, or option-looking value. As in `lib_arg.sh`, a standalone `--` consumed
+immediately as the value of a value option is treated as that literal value;
+only a `--` encountered while the parser is looking for the next option acts as
+the positional boundary.
 
 ## Example
 

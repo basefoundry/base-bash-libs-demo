@@ -137,8 +137,8 @@ teardown() {
 @test "status reports immutable release identity" {
     run "$REPO_ROOT/bin/beacon" status
     [ "$status" -eq 0 ]
-    [[ "$output" == *"framework_version=2.0.0"* ]]
-    [[ "$output" == *"framework_commit=b4243765726c133499feeabdc50154f99c0fec12"* ]]
+    [[ "$output" == *"framework_version=2.2.0"* ]]
+    [[ "$output" == *"framework_commit=d8894bf4453e6b6beaa6de7ce2e082497cb236f2"* ]]
     [[ "$output" == *"framework_dirty_state=clean"* ]]
     [[ "$output" == *"framework_provenance=release-artifact"* ]]
 }
@@ -205,5 +205,5 @@ teardown() {
     run env BASE_BASH_LIBS_DIR="$TEST_ROOT/framework path/library link" \
         "$REPO_ROOT/bin/beacon" status
     [ "$status" -eq 0 ]
-    [[ "$output" == *"framework_version=2.0.0"* ]]
+    [[ "$output" == *"framework_version=2.2.0"* ]]
 }

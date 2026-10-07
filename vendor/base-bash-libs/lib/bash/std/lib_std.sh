@@ -66,7 +66,7 @@
 #   assert_* utilities           # Validation helpers (base_std_assert_not_null / base_std_assert_integer / ...).
 #
 # Patterns:
-#   base_std_run some_cmd             # exits on failure; BASE_BASH_LIBS_DRY_RUN=true/1/yes/on prints instead.
+#   base_std_run some_cmd             # returns on failure; BASE_BASH_LIBS_DRY_RUN=true/1/yes/on prints instead.
 #   base_std_run --timeout 30 some_cmd
 #                                # bounds the command attempt to 30 seconds.
 #   base_std_run --max-attempts 3 --retry-delay 2 some_cmd
@@ -77,7 +77,7 @@
 # Notes:
 #   - Call base_init <result_array> [--source <script>] [--] [argv...]
 #     before using stateful helpers. It strips --debug-wrapper,
-#     --verbose-wrapper, --utc-wrapper, and --color into the result array.
+#     --verbose-wrapper, --utc-wrapper, --color, and --color-mode into the result array.
 #   - --verbose-wrapper is deprecated compatibility surface; prefer --debug-wrapper.
 #   - BASE_BASH_LIBS_BOOTSTRAP_SOURCE is accepted as a source-path fallback by the
 #     explicit initializer, not consumed while this file is sourced.
@@ -244,8 +244,10 @@ unset __base_bash_libs_std_metadata_file__ __base_bash_libs_std_embedded_commit_
 unset -f __base_bash_libs_std_read_package_version__ __base_bash_libs_std_read_metadata_value__
 
 __base_bash_libs_std_is_supported_version__() {
-    local version="${1-}" version_re='^[0-9]+([.][0-9]+)*(-(alpha|beta|rc)[.][1-9][0-9]*)?$'
-    [[ "$version" =~ $version_re ]]
+    local version="${1-}"
+    local canonical_semver_re='^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-(alpha|beta|rc)[.]([1-9][0-9]*))?$'
+
+    [[ "$version" =~ $canonical_semver_re ]]
 }
 
 __base_bash_libs_std_version_at_least__() {
@@ -394,62 +396,68 @@ base_std_check_bash_version() {
 ###################################################### INIT ############################################################
 
 __base_bash_libs_std_init_validate_result_array__() {
-    local result_name="${1-}" declaration attributes nocasematch_enabled=0 attributes_ok=0
+    local __base_bash_libs_std_init_result_name="${1-}"
+    local __base_bash_libs_std_init_declaration __base_bash_libs_std_init_attributes
+    local __base_bash_libs_std_init_nocasematch_enabled=0 __base_bash_libs_std_init_attributes_ok=0
 
-    [[ "$result_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
+    [[ "$__base_bash_libs_std_init_result_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
         printf '%s\n' "base_init: result name must be a valid Bash variable name." >&2
         return 1
     }
-    [[ "$result_name" != __* ]] || {
-        printf '%s\n' "base_init: result name '$result_name' uses the reserved internal namespace." >&2
+    [[ "$__base_bash_libs_std_init_result_name" != __* ]] || {
+        printf '%s\n' "base_init: result name '$__base_bash_libs_std_init_result_name' uses the reserved internal namespace." >&2
         return 1
     }
-    declaration="$(declare -p "$result_name" 2> /dev/null || true)"
-    [[ -n "$declaration" ]] || {
-        printf '%s\n' "base_init: result '$result_name' must be a caller-declared indexed array." >&2
+    __base_bash_libs_std_init_declaration="$(declare -p "$__base_bash_libs_std_init_result_name" 2> /dev/null || true)"
+    [[ -n "$__base_bash_libs_std_init_declaration" ]] || {
+        printf '%s\n' "base_init: result '$__base_bash_libs_std_init_result_name' must be a caller-declared indexed array." >&2
         return 1
     }
-    attributes="${declaration#declare -}"
-    attributes="${attributes%% *}"
+    __base_bash_libs_std_init_attributes="${__base_bash_libs_std_init_declaration#declare -}"
+    __base_bash_libs_std_init_attributes="${__base_bash_libs_std_init_attributes%% *}"
     if shopt -q nocasematch; then
-        nocasematch_enabled=1
+        __base_bash_libs_std_init_nocasematch_enabled=1
         shopt -u nocasematch
     fi
-    if [[ "$attributes" == *a* &&
-        "$attributes" != *A* &&
-        "$attributes" != *r* ]]; then
-        attributes_ok=1
+    if [[ "$__base_bash_libs_std_init_attributes" == *a* &&
+        "$__base_bash_libs_std_init_attributes" != *A* &&
+        "$__base_bash_libs_std_init_attributes" != *r* &&
+        "$__base_bash_libs_std_init_attributes" != *i* &&
+        "$__base_bash_libs_std_init_attributes" != *l* &&
+        "$__base_bash_libs_std_init_attributes" != *n* &&
+        "$__base_bash_libs_std_init_attributes" != *u* ]]; then
+        __base_bash_libs_std_init_attributes_ok=1
     fi
-    if ((nocasematch_enabled)); then
+    if ((__base_bash_libs_std_init_nocasematch_enabled)); then
         shopt -s nocasematch
     fi
-    ((attributes_ok)) || {
-        printf '%s\n' "base_init: result '$result_name' must be a caller-declared indexed array." >&2
+    ((__base_bash_libs_std_init_attributes_ok)) || {
+        printf '%s\n' "base_init: result '$__base_bash_libs_std_init_result_name' must be a caller-declared indexed array." >&2
         return 1
     }
 }
 
 __base_bash_libs_std_init_publish_array__() {
-    local result_name="$1" value
+    local __base_bash_libs_std_init_result_name="$1" __base_bash_libs_std_init_value
     shift
-    eval "$result_name=()"
+    eval "$__base_bash_libs_std_init_result_name=()"
     # shellcheck disable=SC2034 # eval publishes each value into a caller array.
-    for value; do
-        eval "$result_name+=(\"\$value\")"
+    for __base_bash_libs_std_init_value; do
+        eval "$__base_bash_libs_std_init_result_name+=(\"\$__base_bash_libs_std_init_value\")"
     done
 }
 
 __base_bash_libs_std_init_args_match__() {
-    local index=0
+    local __base_bash_libs_std_init_index=0
     (($# == ${#BASE_BASH_LIBS_SCRIPT_ARGS[@]})) || return 1
-    for index in "${!BASE_BASH_LIBS_SCRIPT_ARGS[@]}"; do
-        [[ "${BASE_BASH_LIBS_SCRIPT_ARGS[$index]}" == "$1" ]] || return 1
+    for __base_bash_libs_std_init_index in "${!BASE_BASH_LIBS_SCRIPT_ARGS[@]}"; do
+        [[ "${BASE_BASH_LIBS_SCRIPT_ARGS[$__base_bash_libs_std_init_index]}" == "$1" ]] || return 1
         shift
     done
 }
 
 __base_bash_libs_std_initialize_runtime_state__() {
-    local script_dir="$1"
+    local __base_bash_libs_std_init_script_dir="$1"
     shift
 
     if [[ -n "${BASE_BASH_LIBS_STD_INITIALIZED+x}" ]]; then
@@ -467,6 +475,8 @@ __base_bash_libs_std_initialize_runtime_state__() {
 
     __base_bash_libs_std_log_init__
     declare -g BASE_BASH_LIBS_STD_COLOR_ENABLED=0
+    declare -g __base_bash_libs_std_color_mode=auto
+    declare -g __base_bash_libs_std_wrapper_color_mode=""
     declare -ga __base_bash_libs_std_cleanup_hooks=()
     declare -ga __base_bash_libs_std_cleanup_paths=()
     declare -ga __base_bash_libs_std_cleanup_entries=()
@@ -474,11 +484,15 @@ __base_bash_libs_std_initialize_runtime_state__() {
     declare -g __base_bash_libs_std_cleanup_dispatcher_installed=0
     declare -g __base_bash_libs_std_cleanup_dispatcher_running=0
     declare -g __base_bash_libs_std_cleanup_dispatcher_finished=0
+    declare -g __base_bash_libs_std_cleanup_status=0
     declare -g __base_bash_libs_std_cleanup_pending_signal_status=0
     declare -g __base_bash_libs_std_cleanup_debug_guard_running=0
     declare -g __base_bash_libs_std_original_exit_trap=""
     declare -g __base_bash_libs_std_original_exit_trap_spec=""
     declare -g __base_bash_libs_std_cleanup_dispatcher_trap_spec=""
+    declare -g __base_bash_libs_std_original_hup_trap=""
+    declare -g __base_bash_libs_std_original_hup_trap_spec=""
+    declare -g __base_bash_libs_std_cleanup_hup_trap_spec="__not-installed__"
     declare -g __base_bash_libs_std_original_int_trap=""
     declare -g __base_bash_libs_std_original_int_trap_spec=""
     declare -g __base_bash_libs_std_cleanup_int_trap_spec="__not-installed__"
@@ -489,10 +503,10 @@ __base_bash_libs_std_initialize_runtime_state__() {
     declare -g __base_bash_libs_std_original_debug_trap_spec=""
     declare -g __base_bash_libs_std_cleanup_debug_trap_spec="__not-installed__"
 
-    readonly BASE_BASH_LIBS_STD_INIT_SOURCE="$script_dir"
+    readonly BASE_BASH_LIBS_STD_INIT_SOURCE="$__base_bash_libs_std_init_script_dir"
     declare -ga BASE_BASH_LIBS_SCRIPT_ARGS=("$@")
     readonly -a BASE_BASH_LIBS_SCRIPT_ARGS
-    declare -g BASE_BASH_LIBS_SCRIPT_DIR="$script_dir"
+    declare -g BASE_BASH_LIBS_SCRIPT_DIR="$__base_bash_libs_std_init_script_dir"
     readonly BASE_BASH_LIBS_SCRIPT_DIR
     readonly BASE_BASH_LIBS_STD_INITIALIZED=1
 }
@@ -507,119 +521,159 @@ __base_bash_libs_std_initialize_runtime_state__() {
 #   base_init app_args --source "$script" -- "$@"
 #
 base_init() {
-    local result_name="${1-}" source_path="" script_dir="" arg
-    local parse_config=1 color_requested=0 configure_runtime=0
-    local -a input_args=() filtered_args=()
+    local __base_bash_libs_std_init_result_name="${1-}" __base_bash_libs_std_init_source_path=""
+    local __base_bash_libs_std_init_script_dir="" __base_bash_libs_std_init_arg
+    local __base_bash_libs_std_init_input_index
+    local __base_bash_libs_std_init_parse_config=1 __base_bash_libs_std_init_color_mode_requested=""
+    local __base_bash_libs_std_init_wrapper_color_mode_requested=""
+    local __base_bash_libs_std_init_configure_runtime=0
+    local -a __base_bash_libs_std_init_input_args=() __base_bash_libs_std_init_filtered_args=()
 
     (($# >= 1)) || {
         printf '%s\n' "base_init: expected a result array name." >&2
         return 1
     }
-    __base_bash_libs_std_init_validate_result_array__ "$result_name" || return 1
+    __base_bash_libs_std_init_validate_result_array__ "$__base_bash_libs_std_init_result_name" || return 1
     shift
 
     while (($#)); do
-        if ((parse_config)) && [[ "$1" == "--source" ]]; then
+        if ((__base_bash_libs_std_init_parse_config)) && [[ "$1" == "--source" ]]; then
             (($# >= 2)) || {
                 printf '%s\n' "base_init: --source requires a script path." >&2
                 return 1
             }
-            source_path="$2"
+            __base_bash_libs_std_init_source_path="$2"
             shift 2
             continue
         fi
-        if ((parse_config)) && [[ "$1" == "--" ]]; then
-            parse_config=0
+        if ((__base_bash_libs_std_init_parse_config)) && [[ "$1" == "--" ]]; then
+            __base_bash_libs_std_init_parse_config=0
             shift
-            input_args+=("$@")
+            __base_bash_libs_std_init_input_args+=("$@")
             break
         fi
-        input_args+=("$1")
+        __base_bash_libs_std_init_input_args+=("$1")
         shift
     done
 
-    source_path="${source_path:-${BASE_BASH_LIBS_BOOTSTRAP_SOURCE:-${BASH_SOURCE[1]-}}}"
-    if [[ -n "$source_path" ]]; then
-        script_dir="$(cd -- "$(dirname -- "$source_path")" &> /dev/null && pwd -P)" || {
-            printf '%s\n' "base_init: unable to resolve source directory from '$source_path'." >&2
+    __base_bash_libs_std_init_source_path="${__base_bash_libs_std_init_source_path:-${BASE_BASH_LIBS_BOOTSTRAP_SOURCE:-${BASH_SOURCE[1]-}}}"
+    if [[ -n "$__base_bash_libs_std_init_source_path" ]]; then
+        __base_bash_libs_std_init_script_dir="$(cd -- "$(dirname -- "$__base_bash_libs_std_init_source_path")" &> /dev/null && pwd -P)" || {
+            printf '%s\n' "base_init: unable to resolve source directory from '$__base_bash_libs_std_init_source_path'." >&2
             return 1
         }
     else
-        script_dir="$(pwd -P)" || {
+        __base_bash_libs_std_init_script_dir="$(pwd -P)" || {
             printf '%s\n' "base_init: unable to resolve the current caller directory." >&2
             return 1
         }
     fi
 
     if [[ -n "${BASE_BASH_LIBS_STD_INITIALIZED+x}" ]]; then
-        [[ "${BASE_BASH_LIBS_STD_INIT_SOURCE:-}" == "$script_dir" ]] || {
-            printf '%s\n' "base_init: already initialized for '$BASE_BASH_LIBS_STD_INIT_SOURCE'; requested '$script_dir'." >&2
+        [[ "${BASE_BASH_LIBS_STD_INIT_SOURCE:-}" == "$__base_bash_libs_std_init_script_dir" ]] || {
+            printf '%s\n' "base_init: already initialized for '$BASE_BASH_LIBS_STD_INIT_SOURCE'; requested '$__base_bash_libs_std_init_script_dir'." >&2
             return 1
         }
-        __base_bash_libs_std_init_args_match__ "${input_args[@]+${input_args[@]}}" || {
+        __base_bash_libs_std_init_args_match__ "${__base_bash_libs_std_init_input_args[@]+${__base_bash_libs_std_init_input_args[@]}}" || {
             printf '%s\n' "base_init: repeated initialization received different argv; refusing to hide the mismatch." >&2
             return 1
         }
     else
-        configure_runtime=1
-        __base_bash_libs_std_initialize_runtime_state__ "$script_dir" "${input_args[@]+${input_args[@]}}" || return 1
+        __base_bash_libs_std_init_configure_runtime=1
+        __base_bash_libs_std_initialize_runtime_state__ "$__base_bash_libs_std_init_script_dir" "${__base_bash_libs_std_init_input_args[@]+${__base_bash_libs_std_init_input_args[@]}}" || return 1
     fi
 
-    parse_config=1
-    for arg in "${input_args[@]+${input_args[@]}}"; do
-        if ((parse_config)) && [[ "$arg" == "--" ]]; then
-            filtered_args+=("$arg")
-            parse_config=0
+    __base_bash_libs_std_init_parse_config=1
+    for ((__base_bash_libs_std_init_input_index = 0;  \
+    __base_bash_libs_std_init_input_index < ${#__base_bash_libs_std_init_input_args[@]};  \
+    __base_bash_libs_std_init_input_index++)); do
+        __base_bash_libs_std_init_arg="${__base_bash_libs_std_init_input_args[__base_bash_libs_std_init_input_index]}"
+        if ((__base_bash_libs_std_init_parse_config)) && [[ "$__base_bash_libs_std_init_arg" == "--" ]]; then
+            __base_bash_libs_std_init_filtered_args+=("$__base_bash_libs_std_init_arg")
+            __base_bash_libs_std_init_parse_config=0
             continue
         fi
-        if ((parse_config)); then
-            case "$arg" in
+        if ((__base_bash_libs_std_init_parse_config)); then
+            case "$__base_bash_libs_std_init_arg" in
             --debug-wrapper)
-                if ((configure_runtime)); then
+                if ((__base_bash_libs_std_init_configure_runtime)); then
                     base_std_set_log_level DEBUG
                     base_std_set_log_category_level -l base_bash_libs DEBUG
                     export BASE_BASH_LIBS_LOG_DEBUG=1
                 fi
                 ;;
             --verbose-wrapper)
-                if ((configure_runtime)); then
+                if ((__base_bash_libs_std_init_configure_runtime)); then
                     base_std_set_log_level VERBOSE
                     base_std_set_log_category_level -l base_bash_libs VERBOSE
                     export BASE_BASH_LIBS_LOG_DEBUG=1
                 fi
                 ;;
             --utc-wrapper)
-                if ((configure_runtime)); then
+                if ((__base_bash_libs_std_init_configure_runtime)); then
                     export BASE_BASH_LIBS_LOG_UTC=1
                 fi
                 ;;
             --color)
-                color_requested=1
+                # `--color` was historically a bare launcher flag. A
+                # standard application may also own `--color MODE`; keep that
+                # pair for its parser and offer `--color-mode` to wrappers
+                # that need an unambiguous explicit policy.
+                if __base_bash_libs_std_color_mode_is_valid__ \
+                    "${__base_bash_libs_std_init_input_args[__base_bash_libs_std_init_input_index + 1]-}"; then
+                    __base_bash_libs_std_init_filtered_args+=("$__base_bash_libs_std_init_arg")
+                else
+                    __base_bash_libs_std_init_color_mode_requested=auto
+                    __base_bash_libs_std_init_wrapper_color_mode_requested=""
+                fi
+                ;;
+            --color-mode)
+                __base_bash_libs_std_init_color_mode_requested="${__base_bash_libs_std_init_input_args[__base_bash_libs_std_init_input_index + 1]-}"
+                if ! __base_bash_libs_std_color_mode_is_valid__ "$__base_bash_libs_std_init_color_mode_requested"; then
+                    printf 'base_init: --color-mode expects one of: %s.\n' \
+                        "$(__base_bash_libs_std_color_modes__)" >&2
+                    return 2
+                fi
+                __base_bash_libs_std_init_wrapper_color_mode_requested="$__base_bash_libs_std_init_color_mode_requested"
+                __base_bash_libs_std_init_input_index=$((__base_bash_libs_std_init_input_index + 1))
+                ;;
+            --color-mode=*)
+                __base_bash_libs_std_init_color_mode_requested="${__base_bash_libs_std_init_arg#*=}"
+                if ! __base_bash_libs_std_color_mode_is_valid__ "$__base_bash_libs_std_init_color_mode_requested"; then
+                    printf 'base_init: invalid color mode %s; expected one of: %s.\n' \
+                        "'$__base_bash_libs_std_init_color_mode_requested'" "$(__base_bash_libs_std_color_modes__)" >&2
+                    return 2
+                fi
+                __base_bash_libs_std_init_wrapper_color_mode_requested="$__base_bash_libs_std_init_color_mode_requested"
                 ;;
             *)
-                filtered_args+=("$arg")
+                __base_bash_libs_std_init_filtered_args+=("$__base_bash_libs_std_init_arg")
                 ;;
             esac
         else
-            filtered_args+=("$arg")
+            __base_bash_libs_std_init_filtered_args+=("$__base_bash_libs_std_init_arg")
         fi
     done
 
-    if ((configure_runtime)); then
-        BASE_BASH_LIBS_STD_COLOR_ENABLED="$color_requested"
-        __base_bash_libs_std_init_colors__
+    if ((__base_bash_libs_std_init_configure_runtime)); then
+        if [[ -n "$__base_bash_libs_std_init_color_mode_requested" ]]; then
+            __base_bash_libs_std_apply_color_mode__ "$__base_bash_libs_std_init_color_mode_requested" || return $?
+            __base_bash_libs_std_wrapper_color_mode="$__base_bash_libs_std_init_wrapper_color_mode_requested"
+        else
+            __base_bash_libs_std_init_colors__ || return $?
+        fi
         base_std_set_log_category_level -l base_bash_libs INFO
         # Re-apply explicit debug levels after the default category gate.
-        for arg in "${input_args[@]+${input_args[@]}}"; do
-            if [[ "$arg" == "--debug-wrapper" ]]; then
+        for __base_bash_libs_std_init_arg in "${__base_bash_libs_std_init_input_args[@]+${__base_bash_libs_std_init_input_args[@]}}"; do
+            if [[ "$__base_bash_libs_std_init_arg" == "--debug-wrapper" ]]; then
                 base_std_set_log_category_level -l base_bash_libs DEBUG
-            elif [[ "$arg" == "--verbose-wrapper" ]]; then
+            elif [[ "$__base_bash_libs_std_init_arg" == "--verbose-wrapper" ]]; then
                 base_std_set_log_category_level -l base_bash_libs VERBOSE
             fi
         done
     fi
 
-    __base_bash_libs_std_init_publish_array__ "$result_name" "${filtered_args[@]+${filtered_args[@]}}"
+    __base_bash_libs_std_init_publish_array__ "$__base_bash_libs_std_init_result_name" "${__base_bash_libs_std_init_filtered_args[@]+${__base_bash_libs_std_init_filtered_args[@]}}"
     return 0
 }
 
@@ -847,7 +901,13 @@ base_std_add_to_path() {
 base_std_dedupe_path() {
     local -A seen
     local IFS=':' new_path dir
-    for dir in $PATH; do
+    local -a path_entries=()
+
+    # Read PATH as data before iterating.  An unquoted `$PATH` expansion would
+    # apply pathname expansion, so a literal entry such as `/opt/tools/*`
+    # could be replaced by matching filesystem names (or fail under failglob).
+    IFS=: read -r -a path_entries <<< "$PATH"
+    for dir in "${path_entries[@]+${path_entries[@]}}"; do
         if [[ -n "$dir" && -z "${seen[$dir]-}" ]]; then
             new_path="${new_path:+$new_path:}$dir"
             seen["$dir"]=1
@@ -1075,12 +1135,54 @@ __base_bash_libs_std_print_log_record__() {
 }
 
 #
+# __base_bash_libs_std_color_modes__ - Prints the supported standard color modes.
+__base_bash_libs_std_color_modes__() {
+    printf 'auto,always,never'
+}
+
+__base_bash_libs_std_color_mode_is_valid__() {
+    case "${1-}" in
+    auto | always | never) return 0 ;;
+    *) return 1 ;;
+    esac
+}
+
+__base_bash_libs_std_apply_color_mode__() {
+    local mode="${1-}"
+
+    if ! __base_bash_libs_std_color_mode_is_valid__ "$mode"; then
+        printf 'ERROR: invalid color mode %s.\n' "'$mode'" >&2
+        return 2
+    fi
+    __base_bash_libs_std_color_mode="$mode"
+    if [[ "$mode" == auto ]]; then
+        BASE_BASH_LIBS_STD_COLOR_ENABLED=1
+    fi
+    __base_bash_libs_std_init_colors__
+}
+
 # __base_bash_libs_std_init_colors__ - Initialize colors used for logging
 # This is called from base_init.
 #
 __base_bash_libs_std_init_colors__() {
-    # If --color was not passed, NO_COLOR is set, or the log stream is not a terminal, disable colors.
-    if [[ "$BASE_BASH_LIBS_STD_COLOR_ENABLED" != 1 || -n "${NO_COLOR+x}" || ! -t 2 ]]; then
+    local __base_bash_libs_std_colors_enabled=0
+
+    if ! __base_bash_libs_std_color_mode_is_valid__ "${__base_bash_libs_std_color_mode:-auto}"; then
+        printf 'ERROR: invalid color mode %s.\n' "'${__base_bash_libs_std_color_mode-}'" >&2
+        return 2
+    fi
+    case "${__base_bash_libs_std_color_mode:-auto}" in
+    always)
+        __base_bash_libs_std_colors_enabled=1
+        ;;
+    auto)
+        if [[ "$BASE_BASH_LIBS_STD_COLOR_ENABLED" == 1 && -z "${NO_COLOR+x}" && -t 2 ]]; then
+            __base_bash_libs_std_colors_enabled=1
+        fi
+        ;;
+    never) ;;
+    esac
+    if ((__base_bash_libs_std_colors_enabled == 0)); then
         BASE_BASH_LIBS_STD_COLOR_BOLD=""
         BASE_BASH_LIBS_STD_COLOR_RED=""
         BASE_BASH_LIBS_STD_COLOR_GREEN=""
@@ -1096,7 +1198,6 @@ __base_bash_libs_std_init_colors__() {
         BASE_BASH_LIBS_STD_COLOR_BLUE="\033[0;36m"
         BASE_BASH_LIBS_STD_COLOR_OFF="\033[0m"
     fi
-    readonly BASE_BASH_LIBS_STD_COLOR_BOLD BASE_BASH_LIBS_STD_COLOR_RED BASE_BASH_LIBS_STD_COLOR_GREEN BASE_BASH_LIBS_STD_COLOR_YELLOW BASE_BASH_LIBS_STD_COLOR_BLUE BASE_BASH_LIBS_STD_COLOR_OFF
 }
 
 #
@@ -1529,7 +1630,8 @@ base_std_is_dry_run() {
 
 __base_bash_libs_std_decimal_integer_value__() {
     local __base_bash_libs_std_decimal_result_name="${1-}" __base_bash_libs_std_decimal_value="${2-}" __base_bash_libs_std_decimal_sign=""
-    local __base_bash_libs_std_decimal_digits
+    local __base_bash_libs_std_decimal_digits __base_bash_libs_std_decimal_limit
+    local LC_ALL=C
 
     [[ "$__base_bash_libs_std_decimal_value" =~ ^[-+]?[0-9]+$ ]] || return 1
     case "$__base_bash_libs_std_decimal_value" in
@@ -1549,8 +1651,26 @@ __base_bash_libs_std_decimal_integer_value__() {
         __base_bash_libs_std_decimal_digits="${__base_bash_libs_std_decimal_digits:1}"
     done
 
+    if [[ "$__base_bash_libs_std_decimal_sign" == "-" ]]; then
+        __base_bash_libs_std_decimal_limit=9223372036854775808
+    else
+        __base_bash_libs_std_decimal_limit=9223372036854775807
+    fi
+    if ((${#__base_bash_libs_std_decimal_digits} > ${#__base_bash_libs_std_decimal_limit})); then
+        return 1
+    fi
+    # shellcheck disable=SC2071 # Equal-length decimal strings need lexical ordering.
+    if ((${#__base_bash_libs_std_decimal_digits} == ${#__base_bash_libs_std_decimal_limit})) &&
+        [[ "$__base_bash_libs_std_decimal_digits" > "$__base_bash_libs_std_decimal_limit" ]]; then
+        return 1
+    fi
+
     if [[ "$__base_bash_libs_std_decimal_sign" == "-" && "$__base_bash_libs_std_decimal_digits" != "0" ]]; then
-        printf -v "$__base_bash_libs_std_decimal_result_name" '%s' "-$((10#$__base_bash_libs_std_decimal_digits))"
+        if [[ "$__base_bash_libs_std_decimal_digits" == 9223372036854775808 ]]; then
+            printf -v "$__base_bash_libs_std_decimal_result_name" '%s' -9223372036854775808
+        else
+            printf -v "$__base_bash_libs_std_decimal_result_name" '%s' "-$((10#$__base_bash_libs_std_decimal_digits))"
+        fi
     else
         printf -v "$__base_bash_libs_std_decimal_result_name" '%s' "$((10#$__base_bash_libs_std_decimal_digits))"
     fi
@@ -1729,7 +1849,7 @@ __base_bash_libs_std_run_status_message__() {
 # Features:
 #   - Secure: Does not use `eval`, preventing arbitrary code execution.
 #   - Argument Safe: Correctly handles spaces and special characters in arguments.
-#   - Dry-Run Mode: If the global variable BASE_BASH_LIBS_DRY_RUN (or BASE_BASH_LIBS_DRY_RUN) is truthy, it
+#   - Dry-Run Mode: If the global variable BASE_BASH_LIBS_DRY_RUN is truthy, it
 #     prints the command instead of running it.
 #   - Optional Timeout: `--timeout N` bounds each command attempt to N seconds.
 #   - Optional Retry: `--max-attempts N` retries failed commands up to N total
@@ -2381,19 +2501,21 @@ __base_bash_libs_std_run_with_timeout_supervisor__() {
                 __base_bash_libs_std_timeout_command_wrapper__ <&- 2> /dev/null &
             fi
             __base_bash_libs_std_timeout_command_pid=$!
-            __base_bash_libs_std_timeout_watchdog__ "$__base_bash_libs_std_timeout_seconds" \
-                "$__base_bash_libs_std_timeout_path" "$__base_bash_libs_std_timeout_timer_fd" \
-                "$__base_bash_libs_std_timeout_command_pid" \
-                "$__base_bash_libs_std_timeout_timer_status_file" 2> /dev/null &
-            __base_bash_libs_std_timeout_timer_pid=$!
             # Remove the process-group sentinel from Bash's job table before
             # escalation. Its terminal status is carried by the private
             # record, so no job-table wait is needed and Bash cannot leak a
             # `Killed: 9` notification when the group is deliberately killed.
             builtin disown "$__base_bash_libs_std_timeout_command_pid" 2> /dev/null || true
-            # Both asynchronous jobs already have their isolated process
-            # groups. Disable monitor notifications while they are reaped.
+            # Only caller argv needs an isolated process group. Disable monitor
+            # mode before starting the short-lived watchdog so Bash does not
+            # race its exit while assigning an unnecessary second process
+            # group on macOS.
             set +m
+            __base_bash_libs_std_timeout_watchdog__ "$__base_bash_libs_std_timeout_seconds" \
+                "$__base_bash_libs_std_timeout_path" "$__base_bash_libs_std_timeout_timer_fd" \
+                "$__base_bash_libs_std_timeout_command_pid" \
+                "$__base_bash_libs_std_timeout_timer_status_file" 2> /dev/null &
+            __base_bash_libs_std_timeout_timer_pid=$!
         fi
     fi
 
@@ -2726,7 +2848,7 @@ __base_bash_libs_std_get_trap_command__() {
     EXIT | DEBUG)
         trap_name="$signal"
         ;;
-    INT | TERM)
+    HUP | INT | TERM)
         trap_name="SIG$signal"
         ;;
     *)
@@ -2831,7 +2953,19 @@ __base_bash_libs_std_cleanup_delete_path__() {
 }
 
 __base_bash_libs_std_cleanup_refresh_signal_traps__() {
-    local current_int_trap current_term_trap
+    local current_hup_trap current_int_trap current_term_trap
+
+    current_hup_trap="$(trap -p HUP || true)"
+    if [[ "$current_hup_trap" != "$__base_bash_libs_std_cleanup_hup_trap_spec" ]]; then
+        __base_bash_libs_std_original_hup_trap_spec="$current_hup_trap"
+        __base_bash_libs_std_get_trap_command__ __base_bash_libs_std_original_hup_trap HUP || true
+        if [[ -n "$current_hup_trap" && -z "$__base_bash_libs_std_original_hup_trap" ]]; then
+            __base_bash_libs_std_cleanup_hup_trap_spec="$current_hup_trap"
+        else
+            trap '__base_bash_libs_std_cleanup_signal_exit__ HUP 129' HUP
+            __base_bash_libs_std_cleanup_hup_trap_spec="$(trap -p HUP || true)"
+        fi
+    fi
 
     current_int_trap="$(trap -p INT || true)"
     if [[ "$current_int_trap" != "$__base_bash_libs_std_cleanup_int_trap_spec" ]]; then
@@ -2892,6 +3026,9 @@ __base_bash_libs_std_cleanup_signal_exit__() {
     local signal="$1" exit_status="$2"
 
     case "$signal" in
+    HUP)
+        __base_bash_libs_std_run_saved_trap_command__ "$__base_bash_libs_std_original_hup_trap" "$exit_status"
+        ;;
     INT)
         __base_bash_libs_std_run_saved_trap_command__ "$__base_bash_libs_std_original_int_trap" "$exit_status"
         ;;
@@ -2913,6 +3050,7 @@ __base_bash_libs_std_run_cleanup_hooks__() {
     ((__base_bash_libs_std_cleanup_dispatcher_finished)) && return "$exit_status"
     ((__base_bash_libs_std_cleanup_dispatcher_running)) && return "$exit_status"
     __base_bash_libs_std_cleanup_dispatcher_running=1
+    __base_bash_libs_std_cleanup_status="$exit_status"
     trap - DEBUG
 
     if [[ -n "${__base_bash_libs_std_original_exit_trap:-}" ]]; then
@@ -2956,12 +3094,15 @@ __base_bash_libs_std_install_cleanup_dispatcher__() {
     __base_bash_libs_std_cleanup_pending_signal_status=0
     __base_bash_libs_std_original_exit_trap_spec="$(trap -p EXIT || true)"
     __base_bash_libs_std_get_exit_trap_command__ __base_bash_libs_std_original_exit_trap
+    __base_bash_libs_std_original_hup_trap_spec="$(trap -p HUP || true)"
+    __base_bash_libs_std_get_trap_command__ __base_bash_libs_std_original_hup_trap HUP || true
     __base_bash_libs_std_original_int_trap_spec="$(trap -p INT || true)"
     __base_bash_libs_std_get_trap_command__ __base_bash_libs_std_original_int_trap INT || true
     __base_bash_libs_std_original_term_trap_spec="$(trap -p TERM || true)"
     __base_bash_libs_std_get_trap_command__ __base_bash_libs_std_original_term_trap TERM || true
     __base_bash_libs_std_original_debug_trap_spec="$(trap -p DEBUG || true)"
     __base_bash_libs_std_get_trap_command__ __base_bash_libs_std_original_debug_trap DEBUG || true
+    __base_bash_libs_std_cleanup_hup_trap_spec="__not-installed__"
     __base_bash_libs_std_cleanup_int_trap_spec="__not-installed__"
     __base_bash_libs_std_cleanup_term_trap_spec="__not-installed__"
     __base_bash_libs_std_cleanup_debug_trap_spec="__not-installed__"
@@ -2975,7 +3116,7 @@ __base_bash_libs_std_install_cleanup_dispatcher__() {
 }
 
 __base_bash_libs_std_maybe_uninstall_cleanup_dispatcher__() {
-    local current_exit_trap_spec current_int_trap_spec
+    local current_exit_trap_spec current_hup_trap_spec current_int_trap_spec
     local current_term_trap_spec current_debug_trap_spec
 
     ((__base_bash_libs_std_cleanup_dispatcher_installed)) || return 0
@@ -2988,6 +3129,10 @@ __base_bash_libs_std_maybe_uninstall_cleanup_dispatcher__() {
     if [[ "$current_exit_trap_spec" == "$__base_bash_libs_std_cleanup_dispatcher_trap_spec" ]]; then
         trap - EXIT
         __base_bash_libs_std_restore_trap_spec__ EXIT "$__base_bash_libs_std_original_exit_trap_spec"
+    fi
+    current_hup_trap_spec="$(trap -p HUP || true)"
+    if [[ "$current_hup_trap_spec" == "$__base_bash_libs_std_cleanup_hup_trap_spec" ]]; then
+        __base_bash_libs_std_restore_trap_spec__ HUP "$__base_bash_libs_std_original_hup_trap_spec"
     fi
     current_int_trap_spec="$(trap -p INT || true)"
     if [[ "$current_int_trap_spec" == "$__base_bash_libs_std_cleanup_int_trap_spec" ]]; then
@@ -3008,6 +3153,9 @@ __base_bash_libs_std_maybe_uninstall_cleanup_dispatcher__() {
     __base_bash_libs_std_original_exit_trap=""
     __base_bash_libs_std_original_exit_trap_spec=""
     __base_bash_libs_std_cleanup_dispatcher_trap_spec=""
+    __base_bash_libs_std_original_hup_trap=""
+    __base_bash_libs_std_original_hup_trap_spec=""
+    __base_bash_libs_std_cleanup_hup_trap_spec="__not-installed__"
     __base_bash_libs_std_original_int_trap=""
     __base_bash_libs_std_original_int_trap_spec=""
     __base_bash_libs_std_cleanup_int_trap_spec="__not-installed__"
@@ -3297,7 +3445,7 @@ __base_bash_libs_std_make_temp_path__() {
 
     if (($# < 1 || $# > 2)); then
         base_std_log_error -l base_bash_libs.std "$__base_bash_libs_std_temp_helper_name: usage: $__base_bash_libs_std_temp_helper_name [--keep] <result_variable_name> [prefix]"
-        return 1
+        return 2
     fi
 
     __base_bash_libs_std_temp_result_name="$1"
@@ -3305,12 +3453,12 @@ __base_bash_libs_std_make_temp_path__() {
 
     if ! __base_bash_libs_std_is_valid_variable_name__ "$__base_bash_libs_std_temp_result_name"; then
         base_std_log_error -l base_bash_libs.std "$__base_bash_libs_std_temp_helper_name: result variable name must be a valid Bash variable name."
-        return 1
+        return 2
     fi
-    __base_bash_libs_std_assert_writable_output__ "$__base_bash_libs_std_temp_helper_name" "$__base_bash_libs_std_temp_result_name" || return 1
+    __base_bash_libs_std_assert_writable_output__ "$__base_bash_libs_std_temp_helper_name" "$__base_bash_libs_std_temp_result_name" scalar || return 2
     if [[ -z "$__base_bash_libs_std_temp_prefix" || "$__base_bash_libs_std_temp_prefix" == */* ]]; then
         base_std_log_error -l base_bash_libs.std "$__base_bash_libs_std_temp_helper_name: prefix must be a non-empty filename prefix without '/'."
-        return 1
+        return 2
     fi
 
     __base_bash_libs_std_temp_root="${TMPDIR:-/tmp}"
@@ -3365,7 +3513,7 @@ __base_bash_libs_std_make_temp_path__() {
 #   base_std_make_temp_file [--keep] <result_variable_name> [prefix]
 #
 base_std_make_temp_file() {
-    __base_bash_libs_std_preflight_temp_result_name__ base_std_make_temp_file "$@" || return 1
+    __base_bash_libs_std_preflight_temp_result_name__ base_std_make_temp_file "$@" || return 2
     __base_bash_libs_std_make_temp_path__ base_std_make_temp_file file "$@"
 }
 
@@ -3384,7 +3532,7 @@ __base_bash_libs_std_make_internal_temp_file__() {
 #   base_std_make_temp_dir [--keep] <result_variable_name> [prefix]
 #
 base_std_make_temp_dir() {
-    __base_bash_libs_std_preflight_temp_result_name__ base_std_make_temp_dir "$@" || return 1
+    __base_bash_libs_std_preflight_temp_result_name__ base_std_make_temp_dir "$@" || return 2
     __base_bash_libs_std_make_temp_path__ base_std_make_temp_dir dir "$@"
 }
 
@@ -3404,7 +3552,15 @@ __base_bash_libs_std_is_valid_variable_name__() {
 
 __base_bash_libs_std_assert_writable_output__() {
     local __base_bash_libs_std_output_function_name="${1-}" __base_bash_libs_std_output_name="${2-}"
-    local __base_bash_libs_std_output_declaration __base_bash_libs_std_output_attributes
+    local __base_bash_libs_std_output_kind="${3:-scalar}"
+    local __base_bash_libs_std_output_declaration __base_bash_libs_std_output_attribute_token
+    local __base_bash_libs_std_output_attributes __base_bash_libs_std_output_character
+    local -i __base_bash_libs_std_output_character_index=0 __base_bash_libs_std_output_character_code=0
+    local -i __base_bash_libs_std_output_has_readonly=0 __base_bash_libs_std_output_has_nameref=0
+    local -i __base_bash_libs_std_output_has_integer=0 __base_bash_libs_std_output_has_lowercase=0
+    local -i __base_bash_libs_std_output_has_uppercase=0 __base_bash_libs_std_output_has_indexed=0
+    local -i __base_bash_libs_std_output_has_associative=0 __base_bash_libs_std_output_has_unsupported=0
+    local -i __base_bash_libs_std_output_compatible=0
 
     if [[ "$__base_bash_libs_std_output_name" == __* ]]; then
         case "$__base_bash_libs_std_output_function_name" in
@@ -3419,11 +3575,96 @@ __base_bash_libs_std_assert_writable_output__() {
 
     __base_bash_libs_std_output_declaration="$(declare -p "$__base_bash_libs_std_output_name" 2> /dev/null || true)"
     [[ -n "$__base_bash_libs_std_output_declaration" ]] || return 0
-    __base_bash_libs_std_output_attributes="${__base_bash_libs_std_output_declaration#declare -}"
-    __base_bash_libs_std_output_attributes="${__base_bash_libs_std_output_attributes%% *}"
-    if [[ "$__base_bash_libs_std_output_attributes" == *r* ]]; then
+
+    __base_bash_libs_std_output_attribute_token="${__base_bash_libs_std_output_declaration#declare }"
+    __base_bash_libs_std_output_attribute_token="${__base_bash_libs_std_output_attribute_token%% *}"
+    if [[ "$__base_bash_libs_std_output_attribute_token" == -- ]]; then
+        __base_bash_libs_std_output_attributes=""
+    else
+        __base_bash_libs_std_output_attributes="${__base_bash_libs_std_output_attribute_token#-}"
+    fi
+
+    # Inspect attribute bytes numerically so `shopt -s nocasematch` cannot
+    # confuse indexed-array `a` with associative-array `A`.
+    for ((__base_bash_libs_std_output_character_index = 0;  \
+    __base_bash_libs_std_output_character_index < ${#__base_bash_libs_std_output_attributes};  \
+    __base_bash_libs_std_output_character_index++)); do
+        __base_bash_libs_std_output_character="${__base_bash_libs_std_output_attributes:__base_bash_libs_std_output_character_index:1}"
+        printf -v __base_bash_libs_std_output_character_code '%d' "'$__base_bash_libs_std_output_character"
+        case "$__base_bash_libs_std_output_character_code" in
+        65) __base_bash_libs_std_output_has_associative=1 ;; # A
+        97) __base_bash_libs_std_output_has_indexed=1 ;;     # a
+        105) __base_bash_libs_std_output_has_integer=1 ;;    # i
+        108) __base_bash_libs_std_output_has_lowercase=1 ;;  # l
+        110) __base_bash_libs_std_output_has_nameref=1 ;;    # n
+        114) __base_bash_libs_std_output_has_readonly=1 ;;   # r
+        117) __base_bash_libs_std_output_has_uppercase=1 ;;  # u
+        120) ;;                                              # x (export)
+        *) __base_bash_libs_std_output_has_unsupported=1 ;;
+        esac
+    done
+
+    if ((__base_bash_libs_std_output_has_readonly)); then
         base_std_log_error -l base_bash_libs.std \
             "$__base_bash_libs_std_output_function_name: result variable '$__base_bash_libs_std_output_name' is readonly."
+        return 1
+    fi
+    if ((__base_bash_libs_std_output_has_nameref)); then
+        base_std_log_error -l base_bash_libs.std \
+            "$__base_bash_libs_std_output_function_name: result variable '$__base_bash_libs_std_output_name' is a nameref; named outputs require a direct variable."
+        return 1
+    fi
+
+    case "$__base_bash_libs_std_output_kind" in
+    scalar)
+        if ((!__base_bash_libs_std_output_has_integer && !\
+            __base_bash_libs_std_output_has_lowercase && !\
+            __base_bash_libs_std_output_has_uppercase && !\
+            __base_bash_libs_std_output_has_indexed && !\
+            __base_bash_libs_std_output_has_associative && !\
+            __base_bash_libs_std_output_has_unsupported)); then
+            __base_bash_libs_std_output_compatible=1
+        fi
+        ;;
+    integer)
+        if ((!__base_bash_libs_std_output_has_lowercase && !\
+            __base_bash_libs_std_output_has_uppercase && !\
+            __base_bash_libs_std_output_has_indexed && !\
+            __base_bash_libs_std_output_has_associative && !\
+            __base_bash_libs_std_output_has_unsupported)); then
+            __base_bash_libs_std_output_compatible=1
+        fi
+        ;;
+    indexed-array)
+        if ((__base_bash_libs_std_output_has_indexed && !\
+            __base_bash_libs_std_output_has_integer && !\
+            __base_bash_libs_std_output_has_lowercase && !\
+            __base_bash_libs_std_output_has_uppercase && !\
+            __base_bash_libs_std_output_has_associative && !\
+            __base_bash_libs_std_output_has_unsupported)); then
+            __base_bash_libs_std_output_compatible=1
+        fi
+        ;;
+    associative-array)
+        if ((__base_bash_libs_std_output_has_associative && !\
+            __base_bash_libs_std_output_has_integer && !\
+            __base_bash_libs_std_output_has_lowercase && !\
+            __base_bash_libs_std_output_has_uppercase && !\
+            __base_bash_libs_std_output_has_indexed && !\
+            __base_bash_libs_std_output_has_unsupported)); then
+            __base_bash_libs_std_output_compatible=1
+        fi
+        ;;
+    *)
+        base_std_log_error -l base_bash_libs.std \
+            "$__base_bash_libs_std_output_function_name: internal output contract '$__base_bash_libs_std_output_kind' is unknown."
+        return 1
+        ;;
+    esac
+
+    if ((!__base_bash_libs_std_output_compatible)); then
+        base_std_log_error -l base_bash_libs.std \
+            "$__base_bash_libs_std_output_function_name: result variable '$__base_bash_libs_std_output_name' has attributes incompatible with the $__base_bash_libs_std_output_kind output contract."
         return 1
     fi
     return 0
@@ -3440,6 +3681,55 @@ __base_bash_libs_std_assert_public_variable_names__() {
             return 1
         fi
         shift
+    done
+    return 0
+}
+
+# Non-fatal validation for ordinary public APIs. Assertions below intentionally
+# terminate the caller; reusable helpers must instead diagnose contract errors
+# and return status 2 from their public boundary.
+__base_bash_libs_std_validate_variable_names__() {
+    (($# >= 2)) || return 1
+    local __base_bash_libs_std_validate_operation="$1" __base_bash_libs_std_validate_name
+    shift
+
+    for __base_bash_libs_std_validate_name in "$@"; do
+        if ! __base_bash_libs_std_is_valid_variable_name__ "$__base_bash_libs_std_validate_name"; then
+            base_std_log_error -l base_bash_libs.std \
+                "$__base_bash_libs_std_validate_operation: one or more variable names are invalid."
+            return 1
+        fi
+        if [[ "$__base_bash_libs_std_validate_name" == __* ]]; then
+            base_std_log_error -l base_bash_libs.std \
+                "$__base_bash_libs_std_validate_operation: variable '$__base_bash_libs_std_validate_name' uses the reserved '__' internal namespace."
+            return 1
+        fi
+    done
+    return 0
+}
+
+__base_bash_libs_std_validate_array_kind__() {
+    (($# >= 3)) || return 1
+    local __base_bash_libs_std_validate_array_operation="$1" __base_bash_libs_std_validate_array_kind="$2"
+    local __base_bash_libs_std_validate_array_name __base_bash_libs_std_validate_array_label=indexed
+    local -i __base_bash_libs_std_validate_array_kind_code=0
+    shift 2
+
+    # Compare the marker byte numerically so caller `nocasematch` cannot make
+    # Bash classify the indexed marker `a` as the associative marker `A`.
+    printf -v __base_bash_libs_std_validate_array_kind_code '%d' \
+        "'$__base_bash_libs_std_validate_array_kind"
+    ((__base_bash_libs_std_validate_array_kind_code == 65)) &&
+        __base_bash_libs_std_validate_array_label=associative
+    __base_bash_libs_std_validate_variable_names__ \
+        "$__base_bash_libs_std_validate_array_operation" "$@" || return 1
+    for __base_bash_libs_std_validate_array_name in "$@"; do
+        if ! __base_bash_libs_std_declares_array_kind__ \
+            "$__base_bash_libs_std_validate_array_name" "$__base_bash_libs_std_validate_array_kind"; then
+            base_std_log_error -l base_bash_libs.std \
+                "$__base_bash_libs_std_validate_array_operation: variable '$__base_bash_libs_std_validate_array_name' must be a caller-declared $__base_bash_libs_std_validate_array_label array."
+            return 1
+        fi
     done
     return 0
 }
@@ -3462,7 +3752,7 @@ __base_bash_libs_std_preflight_temp_result_name__() {
         esac
     done
     (($# >= 1)) || return 0
-    __base_bash_libs_std_assert_public_variable_names__ "${FUNCNAME[1]}" "${1-}"
+    __base_bash_libs_std_validate_variable_names__ "${FUNCNAME[1]}" "${1-}"
 }
 
 #
@@ -3493,11 +3783,24 @@ base_std_assert_variable_name() {
 __base_bash_libs_std_declares_array_kind__() {
     local __base_bash_libs_std_array_variable_name="${1-}" __base_bash_libs_std_array_kind="${2-}"
     local __base_bash_libs_std_array_declaration __base_bash_libs_std_array_attributes
+    local __base_bash_libs_std_array_attribute
+    local -i __base_bash_libs_std_array_kind_code=0 __base_bash_libs_std_array_attribute_code=0
+    local -i __base_bash_libs_std_array_attribute_index=0
 
     __base_bash_libs_std_array_declaration="$(declare -p "$__base_bash_libs_std_array_variable_name" 2> /dev/null)" || return 1
     __base_bash_libs_std_array_attributes="${__base_bash_libs_std_array_declaration#declare -}"
     __base_bash_libs_std_array_attributes="${__base_bash_libs_std_array_attributes%% *}"
-    [[ "$__base_bash_libs_std_array_attributes" == *"$__base_bash_libs_std_array_kind"* ]]
+    # Compare attribute bytes numerically so caller `nocasematch` cannot make
+    # Bash confuse indexed `a` and associative `A` declarations.
+    printf -v __base_bash_libs_std_array_kind_code '%d' "'$__base_bash_libs_std_array_kind"
+    for ((__base_bash_libs_std_array_attribute_index = 0;  \
+    __base_bash_libs_std_array_attribute_index < ${#__base_bash_libs_std_array_attributes};  \
+    __base_bash_libs_std_array_attribute_index++)); do
+        __base_bash_libs_std_array_attribute="${__base_bash_libs_std_array_attributes:__base_bash_libs_std_array_attribute_index:1}"
+        printf -v __base_bash_libs_std_array_attribute_code '%d' "'$__base_bash_libs_std_array_attribute"
+        ((__base_bash_libs_std_array_attribute_code == __base_bash_libs_std_array_kind_code)) && return 0
+    done
+    return 1
 }
 
 #
@@ -3567,16 +3870,16 @@ base_std_assert_associative_array() {
 base_std_command_path() {
     if (($# != 2)); then
         base_std_log_error -l base_bash_libs.std "base_std_command_path: usage: base_std_command_path <result_variable_name> <command_name>"
-        return 1
+        return 2
     fi
-    __base_bash_libs_std_assert_public_variable_names__ base_std_command_path "${1-}" || return 1
+    __base_bash_libs_std_validate_variable_names__ base_std_command_path "${1-}" || return 2
     local __base_bash_libs_std_command_result_name="$1" __base_bash_libs_std_command_name="$2" __base_bash_libs_std_command_resolved_path=""
 
     if ! __base_bash_libs_std_is_valid_variable_name__ "$__base_bash_libs_std_command_result_name"; then
         base_std_log_error -l base_bash_libs.std "base_std_command_path: result variable name must be a valid Bash variable name."
-        return 1
+        return 2
     fi
-    __base_bash_libs_std_assert_writable_output__ base_std_command_path "$__base_bash_libs_std_command_result_name" || return 1
+    __base_bash_libs_std_assert_writable_output__ base_std_command_path "$__base_bash_libs_std_command_result_name" scalar || return 2
 
     if [[ -n "$__base_bash_libs_std_command_name" ]]; then
         __base_bash_libs_std_command_resolved_path="$(type -P "$__base_bash_libs_std_command_name" 2> /dev/null || true)"
@@ -3717,9 +4020,12 @@ base_std_assert_integer_range() {
     fi
     __base_bash_libs_std_range_value="${!__base_bash_libs_std_range_name-}"
     __base_bash_libs_std_assert_integer_names__ "$__base_bash_libs_std_range_name"
-    __base_bash_libs_std_decimal_integer_value__ __base_bash_libs_std_range_value_number "$__base_bash_libs_std_range_value"
-    __base_bash_libs_std_decimal_integer_value__ __base_bash_libs_std_range_min_number "$__base_bash_libs_std_range_min"
-    __base_bash_libs_std_decimal_integer_value__ __base_bash_libs_std_range_max_number "$__base_bash_libs_std_range_max"
+    __base_bash_libs_std_decimal_integer_value__ __base_bash_libs_std_range_value_number "$__base_bash_libs_std_range_value" ||
+        base_std_fatal_error "Variable '$__base_bash_libs_std_range_name' with value '$__base_bash_libs_std_range_value' is outside the supported integer range."
+    __base_bash_libs_std_decimal_integer_value__ __base_bash_libs_std_range_min_number "$__base_bash_libs_std_range_min" ||
+        base_std_fatal_error "base_std_assert_integer_range minimum bound '$__base_bash_libs_std_range_min' is outside the supported integer range."
+    __base_bash_libs_std_decimal_integer_value__ __base_bash_libs_std_range_max_number "$__base_bash_libs_std_range_max" ||
+        base_std_fatal_error "base_std_assert_integer_range maximum bound '$__base_bash_libs_std_range_max' is outside the supported integer range."
     ((__base_bash_libs_std_range_min_number > __base_bash_libs_std_range_max_number)) &&
         base_std_fatal_error "base_std_assert_integer_range minimum '$__base_bash_libs_std_range_min' cannot exceed maximum '$__base_bash_libs_std_range_max'."
     ((__base_bash_libs_std_range_value_number < __base_bash_libs_std_range_min_number || __base_bash_libs_std_range_value_number > __base_bash_libs_std_range_max_number)) &&
@@ -3967,7 +4273,7 @@ base_std_get_my_source_dir() {
             "base_std_get_my_source_dir: no result variable name provided."
         return 2
     fi
-    __base_bash_libs_std_assert_public_variable_names__ base_std_get_my_source_dir "${1-}" || return 1
+    __base_bash_libs_std_validate_variable_names__ base_std_get_my_source_dir "${1-}" || return 2
     local __base_bash_libs_std_source_result_name="$1"
 
     if ! __base_bash_libs_std_is_valid_variable_name__ "$__base_bash_libs_std_source_result_name"; then
@@ -3975,7 +4281,7 @@ base_std_get_my_source_dir() {
             "base_std_get_my_source_dir: result variable name must be a valid Bash variable name."
         return 2
     fi
-    __base_bash_libs_std_assert_writable_output__ base_std_get_my_source_dir "$__base_bash_libs_std_source_result_name" || return 1
+    __base_bash_libs_std_assert_writable_output__ base_std_get_my_source_dir "$__base_bash_libs_std_source_result_name" scalar || return 2
     local __base_bash_libs_std_source_dir __base_bash_libs_std_source_path="${BASH_SOURCE[1]-}"
     # Reference: https://stackoverflow.com/a/246128/6862601
     if [[ -n "$__base_bash_libs_std_source_path" ]]; then
@@ -4004,6 +4310,7 @@ base_std_get_my_source_dir() {
 # Arguments:
 #   $1: The message string to display as the prompt.
 #   $2: Optional default, either `no` (the default) or `yes`.
+#   $3: Optional caller-owned input file descriptor.
 #
 # Usage:
 #
@@ -4014,14 +4321,14 @@ base_std_get_my_source_dir() {
 #   fi
 #
 base_std_ask_yes_no() {
-    if (("$#" < 1 || "$#" > 2)); then
+    if (("$#" < 1 || "$#" > 3)); then
         base_std_log_error -l base_bash_libs.std "base_std_ask_yes_no: invalid arguments"
-        base_std_log_info -l base_bash_libs.std "Usage: base_std_ask_yes_no <prompt_message> [yes|no]"
+        base_std_log_info -l base_bash_libs.std "Usage: base_std_ask_yes_no <prompt_message> [yes|no] [input_fd]"
         return 2
     fi
 
-    local message=$1 user_input tty_fd default="no" prompt_suffix
-    if (($# == 2)); then
+    local message=$1 user_input input_fd default="no" prompt_suffix input_fd_owned=0
+    if (($# >= 2)); then
         case "${2,,}" in
         yes) default="yes" ;;
         no) default="no" ;;
@@ -4037,19 +4344,38 @@ base_std_ask_yes_no() {
     else
         prompt_suffix='[y/N]'
     fi
-    if ! exec {tty_fd}< /dev/tty 2> /dev/null; then
-        base_std_log_error -l base_bash_libs.std "base_std_ask_yes_no: /dev/tty is not available"
-        return 1
+    if (("$#" == 3)); then
+        input_fd="${3-}"
+        if [[ ! "$input_fd" =~ ^[0-9]+$ ]]; then
+            base_std_log_error -l base_bash_libs.std \
+                "base_std_ask_yes_no: input_fd must be a non-negative integer."
+            return 2
+        fi
+        if ! { : <&"$input_fd"; } 2> /dev/null; then
+            base_std_log_error -l base_bash_libs.std \
+                "base_std_ask_yes_no: input file descriptor '$input_fd' is not available"
+            return 1
+        fi
+    else
+        if ! exec {input_fd}< /dev/tty 2> /dev/null; then
+            base_std_log_error -l base_bash_libs.std "base_std_ask_yes_no: /dev/tty is not available"
+            return 1
+        fi
+        input_fd_owned=1
     fi
 
     while true; do
         # Prompt the user for input.
         # -n 1: Reads only one character.
         # -r: Prevents backslash from acting as an escape character.
-        # -p: Displays the prompt string.
         # The text "[y/N]" suggests that 'N' is the default choice.
-        if ! read -r -n 1 -p "$message $prompt_suffix: " user_input <&"$tty_fd"; then
-            exec {tty_fd}<&-
+        # Print explicitly so injected non-terminal descriptors receive the
+        # same prompt as the default /dev/tty path.
+        printf '%s' "$message $prompt_suffix: " >&2
+        if ! read -r -n 1 user_input <&"$input_fd"; then
+            if ((input_fd_owned)); then
+                exec {input_fd}<&-
+            fi
             echo
             return 1
         fi
@@ -4059,15 +4385,21 @@ base_std_ask_yes_no() {
 
         case "$user_input" in
         [yY])
-            exec {tty_fd}<&-
+            if ((input_fd_owned)); then
+                exec {input_fd}<&-
+            fi
             return 0
             ;;
         [nN])
-            exec {tty_fd}<&-
+            if ((input_fd_owned)); then
+                exec {input_fd}<&-
+            fi
             return 1
             ;;
         $'\n' | $'\r' | '')
-            exec {tty_fd}<&-
+            if ((input_fd_owned)); then
+                exec {input_fd}<&-
+            fi
             [[ "$default" == yes ]]
             return $?
             ;;

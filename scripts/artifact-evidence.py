@@ -179,7 +179,7 @@ def verify(output, destination):
     vendor = root / "vendor/base-bash-libs"
     require(digest(vendor / "MANIFEST.sha256") == lock["manifest_sha256"], "vendor manifest differs from lock")
     inventory = checksum_inventory(vendor / "MANIFEST.sha256")
-    expected_vendor = {p.relative_to(vendor).as_posix() for p in vendor.rglob("*") if p.is_file()} - {"MANIFEST.sha256", "BUNDLE.release"}
+    expected_vendor = {p.relative_to(vendor).as_posix() for p in vendor.rglob("*") if p.is_file()} - {"MANIFEST.sha256"}
     require(set(inventory) == expected_vendor, "vendor inventory mismatch")
     require(all(digest(vendor / name) == value for name, value in inventory.items()), "vendor payload mismatch")
     bundle = metadata(vendor / "BUNDLE.release")

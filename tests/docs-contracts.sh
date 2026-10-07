@@ -52,7 +52,7 @@ done
 }
 grep -Fq 'Scheduled runs cover both release rows' "$docs_contract_root/docs/framework-updates.md"
 grep -Fq 'leaving that input blank runs both rows' "$docs_contract_root/docs/framework-updates.md"
-grep -Fq 'v2.0.0 baseline and current supported v2.1.0' "$docs_contract_readme"
+grep -Fq 'v2.0.0 rollback baseline and current supported v2.2.0' "$docs_contract_readme"
 grep -Fq "Beacon's README has no separate release" "$docs_contract_root/docs/release-process.md"
 grep -Fq '## [0.1.0] - YYYY-MM-DD' "$docs_contract_root/docs/release-process.md"
 grep -Fq 'Required consumer and artifact validation' "$docs_contract_root/docs/release-process.md"
@@ -71,9 +71,9 @@ grep -Fq 'Hash-locked the SPDX artifact-test dependency' "$docs_contract_root/CH
 
 for docs_contract_url in \
     'https://github.com/basefoundry/base-bash-libs' \
-    'https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/README.md' \
-    'https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/v2/quickstart.md' \
-    'https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/api-reference.md'; do
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/README.md' \
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/v2/quickstart.md' \
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/api-reference.md'; do
     grep -Fq "$docs_contract_url" "$docs_contract_readme" || {
         printf 'README is missing upstream onboarding link: %s\n' "$docs_contract_url" >&2
         exit 1
@@ -84,9 +84,8 @@ if grep -R -n -E 'base-bash-libs/blob/main/docs/(api-reference|v2/quickstart|REA
     printf 'Pinned consumer docs must not link API material to upstream main.\n' >&2
     exit 1
 fi
-grep -Fq 'v2.1.0' "$docs_contract_root/docs/use-in-your-project.md"
-# Keep these literals aligned with docs/use-in-your-project.md until issue #38
-# moves Beacon's vendored pin; update the assertions with that adoption change.
+grep -Fq 'v2.2.0' "$docs_contract_root/docs/use-in-your-project.md"
+# Keep this issue reference aligned with the reviewed adoption change.
 grep -Fq 'issue #38' "$docs_contract_root/docs/use-in-your-project.md"
 
 for docs_contract_heading in \

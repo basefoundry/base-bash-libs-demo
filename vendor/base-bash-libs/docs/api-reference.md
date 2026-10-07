@@ -102,6 +102,24 @@ statuses, and side effects are normative in the linked module README and
 - `base_std_unregister_cleanup_path` — signature: see [`lib/bash/std/README.md`](../lib/bash/std/README.md).
 - `base_std_wait_for_enter` — signature: see [`lib/bash/std/README.md`](../lib/bash/std/README.md).
 
+### `process`
+
+- Kind: `sourceable-library`
+- Source: [`lib/bash/process/lib_process.sh`](../lib/bash/process/lib_process.sh)
+- Documentation: [`lib/bash/process/README.md`](../lib/bash/process/README.md)
+- Tests: [`lib/bash/process/tests/lib_process.bats`](../lib/bash/process/tests/lib_process.bats)
+- Dependencies: `std`
+- Optional commands: `ps,rm,sleep`
+- Stability: `preview`; since `2.1.0`; deprecated: `false`
+- Inputs: documented per symbol in the module README and API charter
+- Outputs: documented per symbol; no caller-owned outputs
+- Statuses: usage and contract errors return 2; a false owner relationship returns 1
+- Side effects: documented per symbol; sourcing is passive
+
+#### Public symbols
+
+- `base_process_owner_alive` — signature: see [`lib/bash/process/README.md`](../lib/bash/process/README.md).
+
 ### `file`
 
 - Kind: `sourceable-library`
@@ -128,7 +146,7 @@ statuses, and side effects are normative in the linked module README and
 - Source: [`lib/bash/git/lib_git.sh`](../lib/bash/git/lib_git.sh)
 - Documentation: [`lib/bash/git/README.md`](../lib/bash/git/README.md)
 - Tests: [`lib/bash/git/tests/lib_git.bats`](../lib/bash/git/tests/lib_git.bats)
-- Dependencies: `std`
+- Dependencies: `std,str`
 - Optional commands: `git,awk,grep,mktemp,rm,sleep`
 - Stability: `stable`; since `2.0.0`; deprecated: `false`
 - Inputs: documented per symbol in the module README and API charter
@@ -155,6 +173,7 @@ statuses, and side effects are normative in the linked module README and
 - Documentation: [`lib/bash/gh/README.md`](../lib/bash/gh/README.md)
 - Tests: [`lib/bash/gh/tests/lib_gh.bats`](../lib/bash/gh/tests/lib_gh.bats)
 - Dependencies: `std`
+- Implementation dependencies: `process`
 - Optional commands: `gh,awk,grep,mktemp,rm,sleep,timeout,gtimeout`
 - Stability: `stable`; since `2.0.0`; deprecated: `false`
 - Inputs: documented per symbol in the module README and API charter
@@ -278,7 +297,7 @@ statuses, and side effects are normative in the linked module README and
 - Source: [`lib/bash/app/lib_app.sh`](../lib/bash/app/lib_app.sh)
 - Documentation: [`lib/bash/app/README.md`](../lib/bash/app/README.md)
 - Tests: [`lib/bash/app/tests/lib_app.bats`](../lib/bash/app/tests/lib_app.bats)
-- Dependencies: `std,cli`
+- Dependencies: `std,cli,str`
 - Optional commands: `none`
 - Stability: `stable`; since `2.0.0`; deprecated: `false`
 - Inputs: documented per symbol in the module README and API charter

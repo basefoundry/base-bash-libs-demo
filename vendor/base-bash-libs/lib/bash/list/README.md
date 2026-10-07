@@ -45,15 +45,17 @@ fi
 
 Mutating helpers update the caller-owned array in place. Array arguments and
 array result variables must already be declared as indexed arrays, for example
-with `declare -a values=()`. Scalar result helpers accept the name of the output
-variable, validate it with `base_std_assert_variable_name`, and avoid stdout capture for
-caller state.
+with `declare -a values=()`. `base_list_length` accepts an untyped or integer
+(`-i`) scalar result; other string-valued scalar outputs must be untyped or
+exported only. Integer and case-converting attributes are rejected when they
+could coerce array or string data. Readonly variables and nameref outputs are
+rejected before mutation.
 
 For `base_list_unique` and `base_list_length`, the result and source variable names must
 be distinct. An alias is rejected before the source is changed.
 
-Append and prepend usage errors return status `2`; validation and operational
-failures return without terminating the caller.
+Usage and caller-contract errors return status `2`. Predicate misses and
+operational failures return `1`; validation never terminates the caller.
 
 ## Tests
 

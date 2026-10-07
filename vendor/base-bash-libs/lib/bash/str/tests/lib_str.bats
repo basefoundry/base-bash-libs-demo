@@ -70,12 +70,14 @@ create_script() {
                 declare -a app_args=()
                 base_init app_args --
                 source "$3"
-                "$4"
-                exit $?
+                if "$4"; then status=0; else status=$?; fi
+                printf "after\n"
+                exit "$status"
             ' bash "$mode" "$BASE_BASH_DIR/std/lib_std.sh" "$BASE_BASH_DIR/str/lib_str.sh" "$function_name"
 
-            [ "$status" -eq 1 ]
+            [ "$status" -eq 2 ]
             [[ "$output" != *"unbound variable"* ]]
+            [[ "$output" == *"after"* ]]
         done
     done
 }
@@ -111,6 +113,16 @@ create_script() {
     [ ! -s "$stdout_file" ]
 }
 
+@test "shared TSV field escaping preserves ordinary values and encodes delimiters" {
+    local value=$'ordinary\\value\twith-tab\nwith-newline\rwith-carriage'
+    local escaped expected
+
+    escaped="$(__base_bash_libs_str_escape_tsv_field__ "$value")"
+    expected=$'ordinary\\\\value\\twith-tab\\nwith-newline\\rwith-carriage'
+
+    [ "$escaped" = "$expected" ]
+}
+
 @test "string mutators reject readonly output variables" {
     local value="Alpha"
     local stderr_file="$TEST_TMPDIR/string-readonly.err"
@@ -123,9 +135,67 @@ create_script() {
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$value" = "Alpha" ]
     [[ "$(cat "$stderr_file")" == *"result variable 'value' is readonly"* ]]
+}
+
+@test "string mutators reject typed outputs before coercing caller data" {
+    local stderr_file="$TEST_TMPDIR/string-typed-output.err"
+    local rc
+    local -i integer_value=42
+    local -u uppercase_value=MiXeD
+
+    if base_str_lower integer_value 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "$integer_value" -eq 42 ]
+    [[ "$(<"$stderr_file")" == *"attributes incompatible with the scalar output contract"* ]]
+
+    if base_str_lower uppercase_value 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "$uppercase_value" = MIXED ]
+}
+
+@test "string split rejects indexed-array outputs with coercing attributes" {
+    local stderr_file="$TEST_TMPDIR/string-array-output.err"
+    local rc
+    local -au fields=(sentinel)
+
+    if base_str_split fields "one:two" : 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    [ "$rc" -eq 2 ]
+    [ "${fields[0]}" = SENTINEL ]
+    [ "${#fields[@]}" -eq 1 ]
+    [[ "$(<"$stderr_file")" == *"attributes incompatible with the indexed-array output contract"* ]]
+}
+
+@test "array output contracts distinguish indexed from associative arrays with nocasematch" {
+    local stderr_file="$TEST_TMPDIR/string-associative-output.err"
+    local rc
+    local -A fields=([keep]=sentinel)
+    shopt -s nocasematch
+
+    if base_str_split fields "one:two" : 2>"$stderr_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    shopt -u nocasematch
+
+    [ "$rc" -eq 2 ]
+    [ "${fields[keep]}" = sentinel ]
+    [[ "$(<"$stderr_file")" == *"must be a caller-declared indexed array"* ]]
 }
 
 @test "readonly string outputs cannot collide with argument-count decimal locals" {
@@ -141,14 +211,14 @@ create_script() {
             readonly "$3"
             base_str_lower "$3"
             case $? in
-                1) ;;
+                2) ;;
                 *) exit 99 ;;
             esac
             printf "value=%s\n" "${!3}"
-            exit 1
+            exit 2
         ' bash "$BASE_BASH_DIR/std/lib_std.sh" "$BASE_BASH_DIR/str/lib_str.sh" "$candidate"
 
-        [ "$status" -eq 1 ]
+        [ "$status" -eq 2 ]
         [[ "$output" == *"result variable '$candidate' is readonly"* ]]
         [[ "$output" == *"value=MiXeD"* ]]
         [[ "$output" != *"readonly variable"* ]]
@@ -169,8 +239,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"base_std_assert_variable_name expects valid Bash variable names"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_str_trim: one or more variable names are invalid"* ]]
     [[ "$output" != *"not-valid"* ]]
 }
 
@@ -190,6 +260,28 @@ EOF
     fi
 }
 
+@test "string predicates and split remain exact under nocasematch" {
+    local -a parts=()
+
+    shopt -s nocasematch
+    if base_str_contains "aB" "b"; then
+        return 1
+    fi
+    if base_str_starts_with "aB" "A"; then
+        return 1
+    fi
+    if base_str_ends_with "aB" "b"; then
+        return 1
+    fi
+
+    base_str_split parts "aB" "b"
+    shopt -q nocasematch
+    shopt -u nocasematch
+
+    [ "${#parts[@]}" -eq 1 ]
+    [ "${parts[0]}" = "aB" ]
+}
+
 @test "string predicate helpers reject incorrect argument counts" {
     local script="$TEST_TMPDIR/string-predicate-arity.sh"
 
@@ -201,16 +293,16 @@ source "$BASE_BASH_DIR/str/lib_str.sh"
 EOF
 
     bats_run bash "$script" base_str_contains "needle-only"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"Argument count mismatch: expected 2 but got 1 arguments"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_str_contains: usage"* ]]
 
     bats_run bash "$script" base_str_starts_with "value" "prefix" "extra"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"Argument count mismatch: expected 2 but got 3 arguments"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_str_starts_with: usage"* ]]
 
     bats_run bash "$script" base_str_ends_with
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"Argument count mismatch: expected 2 but got 0 arguments"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_str_ends_with: usage"* ]]
 }
 
 @test "base_str_split stores delimited fields in a named array" {
@@ -234,6 +326,17 @@ EOF
     [ "${parts[0]}" = "alpha" ]
     [ "${parts[1]}" = "beta" ]
     [ "${parts[2]}" = "" ]
+}
+
+@test "base_str_split preserves a leading empty field before the first separator" {
+    local -a parts=()
+
+    base_str_split parts ",alpha,beta" ","
+
+    [ "${#parts[@]}" -eq 3 ]
+    [ "${parts[0]}" = "" ]
+    [ "${parts[1]}" = "alpha" ]
+    [ "${parts[2]}" = "beta" ]
 }
 
 @test "base_str_split can store results in an array named fields" {
@@ -260,8 +363,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"base_std_assert_variable_name expects valid Bash variable names"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_str_split: one or more variable names are invalid"* ]]
     [[ "$output" != *"not-valid"* ]]
 }
 
@@ -297,7 +400,7 @@ EOF
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "${#values[@]}" -eq 2 ]
     [ "${values[0]}" = "alpha" ]
     [ "${values[1]}" = "beta" ]
@@ -333,7 +436,7 @@ EOF
         rc=$?
     fi
 
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$__base_bash_libs_str_var_name" = "Mixed Case" ]
     [[ "$(cat "$stderr_file")" == *"uses the reserved '__' internal namespace"* ]]
 }
@@ -353,7 +456,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$actual" = "Mixed Case" ]
 
     if base_str_join __base_bash_libs_str_join_result_name , values 2>"$stderr_file"; then
@@ -361,7 +464,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$joined" = "keep" ]
 
     if base_str_join joined , __base_bash_libs_str_join_values 2>"$stderr_file"; then
@@ -369,7 +472,7 @@ EOF
     else
         rc=$?
     fi
-    [ "$rc" -eq 1 ]
+    [ "$rc" -eq 2 ]
     [ "$joined" = "keep" ]
     [ "${__base_bash_libs_str_join_values[*]}" = "alpha beta" ]
     [[ "$(cat "$stderr_file")" == *"uses the reserved '__' internal namespace"* ]]
@@ -389,8 +492,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"base_std_assert_variable_name expects valid Bash variable names"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_str_join: one or more variable names are invalid"* ]]
     [[ "$output" != *"not-valid"* ]]
 
     script="$TEST_TMPDIR/str-join-invalid-result.sh"
@@ -405,8 +508,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"base_std_assert_variable_name expects valid Bash variable names"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"base_str_join: one or more variable names are invalid"* ]]
     [[ "$output" != *"not-valid"* ]]
 }
 
@@ -427,8 +530,8 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"must be an indexed array declared by the caller"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"must be a caller-declared indexed array"* ]]
 
     create_script "$script" <<EOF
 #!/usr/bin/env bash
@@ -441,7 +544,7 @@ EOF
 
     bats_run bash "$script"
 
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"must be an indexed array declared by the caller"* ]]
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"must be a caller-declared indexed array"* ]]
 
 }

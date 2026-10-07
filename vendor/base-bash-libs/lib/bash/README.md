@@ -7,10 +7,16 @@ Reusable Bash libraries for command wrappers and other Bash tooling.
 - `std/`
   Foundation library with logging, error handling, PATH helpers, and other
   shared Bash primitives.
+- `process/`
+  Preview-only process-supervision primitives layered on top of the stdlib;
+  this module was first shipped in the immutable `v2.1.0` release and is not
+  part of the stable API.
 - `git/`
   Git-related helpers built on top of the stdlib.
 - `gh/`
-  GitHub CLI helpers built on top of the stdlib.
+  Stable GitHub CLI helpers since `v2.0.0`, built on top of the stdlib and the
+  preview `process` module. The `v2.1.0` release ships that private dependency
+  alongside the stable public surface.
 - `file/`
   File-editing helpers built on top of the stdlib.
 - `str/`
@@ -36,8 +42,9 @@ modules.
 
 ## Caller Runtime Contract
 
-All public modules support Bash 4.2 or newer with every combination of caller-
-selected `errexit`, `nounset`, and `pipefail`. Sourcing a module is passive: it
+All public modules support Bash 4.2 or newer; the tested minimum is Bash 4.2.53.
+They support every combination of caller-selected `errexit`, `nounset`, and
+`pipefail`. Sourcing a module is passive: it
 does not change those settings, any other `set` or `shopt` option, `IFS`,
 `OPTIND`, the working directory, the umask, traps, exports, or ordinary
 positional arguments. After sourcing `lib_std.sh`, callers explicitly invoke
@@ -102,7 +109,7 @@ package-relative API:
 
 ```bash
 source "/path/to/base-bash-libs/lib/bash/std/lib_std.sh"
-base_std_import str/lib_str.sh file/lib_file.sh
+base_std_import process/lib_process.sh str/lib_str.sh file/lib_file.sh
 ```
 
 `base_std_import` resolves paths from the loaded package's `lib/bash` root, so

@@ -64,6 +64,14 @@ documented arguments. Public helpers that write through caller-supplied
 variable or array names reserve the `__` prefix for library-internal state;
 such output names are rejected before caller state is changed.
 
+Named scalar outputs accept untyped or exported scalar variables. Numeric
+outputs also accept integer (`-i`) scalars. Array outputs must use the exact
+indexed or associative kind documented by the API; integer and case-converting
+(`-l`/`-u`) attributes are rejected where they could coerce data. Readonly
+variables and nameref outputs are rejected before writes. Namerefs are not
+resolved, which avoids following readonly, cyclic, or reserved targets on Bash
+versions that support namerefs.
+
 ### Runtime and Imports
 
 - `base_init <result_array> [--source <script>] -- [argv...]`:
@@ -72,7 +80,7 @@ such output names are rejected before caller state is changed.
 - `base_require_version <version>`: returns `1` when the loaded package version
   is older and `2` for malformed usage/version values.
 - `base_std_check_bash_version`: returns zero for Bash 4.2 or newer and reports the
-  required version otherwise.
+  required version otherwise. The tested minimum is Bash 4.2.53.
 - `base_std_is_interactive`: returns zero when stdin is attached to an interactive TTY.
 - `base_std_import <path>...`: sources package-relative modules from the loaded
   `lib/bash` root; returns a recoverable failure for missing, unsafe, cyclic,
@@ -116,6 +124,10 @@ such output names are rejected before caller state is changed.
   supplied status after logging a message for nonzero status.
 - `base_std_fatal_error <message...>`: logs a fatal error, prints a trace, and exits.
 - `base_std_is_dry_run`: returns zero when `BASE_BASH_LIBS_DRY_RUN` is truthy.
+
+New asynchronous process-supervision primitives belong to the optional
+`process` module; the stdlib remains the owner of the stable command-runner
+APIs above.
 
 ### PATH and Filesystem Helpers
 
@@ -172,8 +184,10 @@ such output names are rejected before caller state is changed.
 
 ### Interactive Helpers
 
-- `base_std_ask_yes_no <prompt> [yes|no]`: prompts on a TTY, accepts Enter as
-  the displayed `[y/N]` or `[Y/n]` default, and returns the user's decision.
+- `base_std_ask_yes_no <prompt> [yes|no] [input_fd]`: prompts on `/dev/tty`
+  by default, or reads from the optional caller-owned input file descriptor;
+  accepts Enter as the displayed `[y/N]` or `[Y/n]` default, and returns the
+  user's decision. A supplied descriptor remains open for the caller.
 - `base_std_wait_for_enter [prompt]`: waits for Enter on a TTY and returns nonzero when
   no usable terminal is available.
 
@@ -202,9 +216,9 @@ main() {
 
 Base entrypoints preload this library through Base's own runtime bootstrap. The
 `base-bash` launcher provides the same stdlib preload pattern without Base
-runtime state. Callers should run on Bash 4.2 or newer; the library has passive
-Bash version helpers, but sourcing it does not prompt, install packages, or
-re-exec the caller.
+runtime state. Callers should run on Bash 4.2 or newer; the tested minimum is
+Bash 4.2.53. The library has passive Bash version helpers, but sourcing it does
+not prompt, install packages, or re-exec the caller.
 
 ## Initialization Contract
 
@@ -260,9 +274,10 @@ initializer. A launcher may pass `--source` directly; `BASE_BASH_LIBS_BOOTSTRAP_
 is only a fallback for callers that cannot provide that option.
 
 The library preserves caller-selected `errexit`, `nounset`, and `pipefail`
-settings and supports every combination on Bash 4.2 or newer. It does not
-enable or disable those options for the caller. A top-level interactive or
-`bash -c` source has no outer `BASH_SOURCE` frame; without a bootstrap override,
+settings and supports every combination on Bash 4.2 or newer; the tested minimum
+is Bash 4.2.53. It does not enable or disable those options for the caller. A
+top-level interactive or `bash -c` source has no outer `BASH_SOURCE` frame;
+without a bootstrap override,
 `BASE_BASH_LIBS_SCRIPT_DIR` and `base_std_get_my_source_dir` use the current working directory in
 that case. Predicate helpers can intentionally return nonzero, so callers using
 `errexit` should invoke them in `if`, `while`, `&&`, or another normal Bash
@@ -277,10 +292,12 @@ added after the first public release:
 base_require_version 1.1.0
 ```
 
-The helper compares supported SemVer versions, including the v2
-`alpha.N`, `beta.N`, and `rc.N` prerelease identifiers. It returns silently
-when the loaded library is new enough and exits with a clear fatal error when
-the loaded `BASE_BASH_LIBS_VERSION` is too old.
+The helper accepts exactly three canonical decimal core components (for
+example, `1.4.0` or `2.0.0`) with no leading zeroes except the value `0`.
+It also compares the supported `alpha.N`, `beta.N`, and `rc.N` prerelease
+identifiers, where `N` is a positive canonical decimal integer. It returns
+silently when the loaded library is new enough, returns `1` when it is too old,
+and returns `2` when either version is malformed.
 
 ## Logging
 
@@ -411,8 +428,16 @@ base_std_print_message "plain stdout message"
 `log_*`, `base_std_print_error`, `base_std_print_warn`, `base_std_print_info`, and `base_std_print_success` write to
 stderr. `base_std_print_bold` and `base_std_print_message` write to stdout.
 
-Colors are only enabled for terminal stderr when `--color` is passed. Set
-`NO_COLOR` to disable colored output even when `--color` is present.
+The legacy `base_init --color` control requests automatic color and only enables
+it when stderr is a terminal and `NO_COLOR` is unset. Wrappers can use
+`base_init --color-mode auto|always|never` to select an explicit standard
+color policy; this explicit wrapper setting takes precedence over an app-level
+`--color MODE`. `always` overrides `NO_COLOR`, and `never` disables color.
+The application's own `--color MODE` pair remains untouched for its parser.
+Arguments after the application's separator remain application-owned. Applications using
+`base_app_add_standard_options` can select `auto`, `always`, or `never`:
+`always` explicitly forces ANSI output even when stderr is captured or
+`NO_COLOR` is set; `never` disables it.
 
 ## Error Handling
 
@@ -471,9 +496,12 @@ BASE_BASH_LIBS_DRY_RUN=true
 base_std_run brew install jq
 ```
 
-`BASE_BASH_LIBS_DRY_RUN` and `BASE_BASH_LIBS_DRY_RUN` both accept `true`, `1`, `yes`, and `on`. Use
-`base_std_is_dry_run` when a script needs to branch on the same normalized dry-run state
-without executing a command through `base_std_run`.
+`BASE_BASH_LIBS_DRY_RUN` accepts `true`, `1`, `yes`, and `on`. The application
+policy exposes its normalized `0`/`1` state separately as
+`BASE_BASH_LIBS_APP_DRY_RUN`; application code can inspect that value, while
+the stdlib uses only `BASE_BASH_LIBS_DRY_RUN`. Use `base_std_is_dry_run` when a
+script needs to branch on the stdlib's normalized dry-run state without
+executing a command through `base_std_run`.
 
 Protect framework-generated diagnostics for a command whose arguments contain
 credentials or other sensitive values with `--sensitive`. Protected calls must

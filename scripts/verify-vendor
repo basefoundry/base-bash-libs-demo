@@ -48,11 +48,8 @@ while IFS= read -r verify_manifest_line || [[ -n "$verify_manifest_line" ]]; do
         verify_fail "malformed vendor manifest record"
     verify_manifest_name="${BASH_REMATCH[1]}"
     verify_validate_manifest_path "$verify_manifest_name"
-    case "$verify_manifest_name" in
-        MANIFEST.sha256|BUNDLE.release)
-            verify_fail "vendor identity file must not be listed in its manifest: $verify_manifest_name"
-            ;;
-    esac
+    [[ "$verify_manifest_name" != MANIFEST.sha256 ]] || \
+        verify_fail "vendor manifest must not list itself"
     printf '%s\n' "$verify_manifest_name" >> "$verify_manifest_names"
 done < "$verify_vendor/MANIFEST.sha256"
 [[ -s "$verify_manifest_names" ]] || verify_fail "vendor manifest inventory is empty"
@@ -70,7 +67,7 @@ while IFS= read -r -d '' verify_actual_path; do
     fi
     [[ -f "$verify_actual_path" ]] || verify_fail "vendor tree contains a special file: $verify_actual_name"
     case "$verify_actual_name" in
-        MANIFEST.sha256|BUNDLE.release)
+        MANIFEST.sha256)
             ;;
         *)
             verify_validate_manifest_path "$verify_actual_name"
