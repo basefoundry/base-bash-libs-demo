@@ -109,7 +109,7 @@ preparation tools: they never create a tag, GitHub Release, or network request.
    its exact context is configured and read back. Run the repository
    validation command, `git diff --check`, and the standalone artifact gate
    above. Review the generated SBOM, provenance, and release notes prepared from
-   `docs/release-notes-template.md`.
+    `docs/release-notes-template.md`.
 5. Open and merge the release-preparation pull request.
 6. Sync local `main`, then inspect the release:
 
