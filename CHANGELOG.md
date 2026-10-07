@@ -7,6 +7,10 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [0.1.0] - 2026-10-07
+
 ### Added
 
 - Initialized the repository with the Base-managed repo baseline.
