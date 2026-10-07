@@ -157,9 +157,11 @@ maintainer action. See the [release process](docs/release-process.md).
 
 ## Framework compatibility
 
-The scheduled and manually dispatched `Framework Compatibility` workflow tests
-an explicit Base Bash release tag or full commit without changing Beacon's
-committed default package. The same black-box contract is available locally:
+The scheduled `Framework Compatibility` workflow tests both the immutable
+v2.0.0 baseline and current supported v2.1.0 release on Ubuntu and macOS.
+Manual dispatch can test one explicit Base Bash release tag or full commit
+without changing Beacon's committed default package. The same black-box
+contract is available locally:
 
 ```bash
 ./tests/candidate-smoke.sh /path/to/base-bash-libs-candidate
