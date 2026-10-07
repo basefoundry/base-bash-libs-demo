@@ -103,10 +103,12 @@ preparation tools: they never create a tag, GitHub Release, or network request.
    Ordinary pull requests remain under `[Unreleased]`; only release-preparation
    work changes the published version.
 4. Read [`ci-required-checks.md`](ci-required-checks.md) and confirm the exact
-   `Required consumer and artifact validation` aggregate is part of the
-   release-preparation merge gate. Run the repository validation command,
-   `git diff --check`, and the standalone artifact gate above. Review the
-   generated SBOM, provenance, and release notes prepared from
+   `Required consumer and artifact validation` aggregate is green; it is the
+   intended release-preparation merge gate. [Issue #37](https://github.com/basefoundry/base-bash-libs-demo/issues/37)
+   tracks the separate ruleset update that will enforce this aggregate after
+   its exact context is configured and read back. Run the repository
+   validation command, `git diff --check`, and the standalone artifact gate
+   above. Review the generated SBOM, provenance, and release notes prepared from
    `docs/release-notes-template.md`.
 5. Open and merge the release-preparation pull request.
 6. Sync local `main`, then inspect the release:

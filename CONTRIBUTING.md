@@ -61,5 +61,7 @@ running `basectl test`.
 
 Before merging release-preparation work, confirm the exact
 `Required consumer and artifact validation` aggregate described in
-[`docs/ci-required-checks.md`](docs/ci-required-checks.md) is green and is the
-required repository gate for the pull request.
+[`docs/ci-required-checks.md`](docs/ci-required-checks.md) is green. It is the
+intended repository gate for the pull request; [issue #37](https://github.com/basefoundry/base-bash-libs-demo/issues/37)
+tracks enabling it as an enforced required ruleset check after the exact
+context is configured and read back.
