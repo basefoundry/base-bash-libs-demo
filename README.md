@@ -15,9 +15,9 @@ runtime. The verified `base-bash-libs` v2.0.0 release bundle is committed under
 ## Start here
 
 - [Base Bash overview](https://github.com/basefoundry/base-bash-libs)
-- [Versioned documentation map](https://github.com/basefoundry/base-bash-libs/blob/main/docs/README.md)
-- [Five-minute v2 quickstart](https://github.com/basefoundry/base-bash-libs/blob/main/docs/v2/quickstart.md)
-- [Generated public API reference](https://github.com/basefoundry/base-bash-libs/blob/main/docs/api-reference.md)
+- [Versioned documentation map](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/README.md)
+- [Five-minute v2 quickstart](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/v2/quickstart.md)
+- [Generated public API reference](https://github.com/basefoundry/base-bash-libs/blob/v2.0.0/docs/api-reference.md)
 - [Beacon documentation and recommended reading path](docs/README.md)
 
 To move directly from evaluation to a small application, follow
@@ -44,7 +44,7 @@ for prerequisites, adoption costs, alternatives, and maturity signals.
 
 ## Quick start
 
-Use Bash 4.2 or newer. On macOS, install a supported Bash with Homebrew; the
+Use Bash 4.2.53 or newer. On macOS, install a supported Bash with Homebrew; the
 vendored launcher discovers it automatically.
 
 ```bash

@@ -29,7 +29,7 @@ Prefer a smaller solution when:
 - the script is short, single-purpose, and unlikely to grow;
 - POSIX `sh` rather than Bash is the required runtime;
 - option parsing is the only repeated problem;
-- installing Bash 4.2 or newer on every target is unacceptable;
+- installing Bash 4.2.53 or newer on every target is unacceptable;
 - a generated standalone program is preferred to a sourceable runtime
   dependency; or
 - Python, Go, Rust, or another richer runtime is available and better suited to
@@ -41,7 +41,7 @@ introduces.
 
 ## Runtime prerequisites
 
-Base Bash requires Bash 4.2 or newer. Linux environments commonly satisfy that
+Base Bash requires Bash 4.2.53 or newer. Linux environments commonly satisfy that
 requirement. macOS `/bin/bash` is 3.2, so supported macOS use requires a newer
 Bash such as Homebrew Bash. Beacon's launcher discovers that supported Bash,
 but it cannot remove the installation requirement.
@@ -84,7 +84,7 @@ own documentation; verify current requirements before choosing.
 | [`getoptions`](https://github.com/ko1nksm/getoptions) | POSIX-shell portability and option parsing/help are the primary needs | A focused parser and generator rather than an application lifecycle, typed-configuration, filesystem, Git, and package-identity library |
 | [`Bashly`](https://github.com/bashly-framework/bashly) | A YAML-driven generator producing a standalone Bash CLI fits the delivery model | Generation uses Ruby or Docker and centers on generated CLI structure; Base Bash is a sourceable Bash runtime with broader operational contracts |
 | [`Bash Infinity`](https://github.com/niieani/bash-oo-framework) | Its object-oriented and exception-style Bash programming model is specifically desired | A substantially different application model; consult its current project guidance before selecting it for new work |
-| Base Bash | Bash 4.2+ is acceptable and CLI, configuration, lifecycle, safe execution, and immutable delivery should share one public contract | Broader dependency and upgrade responsibility than a parser-only or plain-Bash solution |
+| Base Bash | Bash 4.2.53+ is acceptable and CLI, configuration, lifecycle, safe execution, and immutable delivery should share one public contract | Broader dependency and upgrade responsibility than a parser-only or plain-Bash solution |
 
 This is a boundary comparison, not a ranking. Prototype the smallest realistic
 command and failure path before standardizing a team on any option.
@@ -113,7 +113,7 @@ calibrating operational risk.
 
 Before adopting, answer yes to the questions that matter for your project:
 
-- Can every target run Bash 4.2 or newer?
+- Can every target run Bash 4.2.53 or newer?
 - Does the application need enough shared behavior to justify a framework?
 - Which immutable installation or vendoring mode will you support?
 - Who reviews framework upgrades and retained release evidence?
