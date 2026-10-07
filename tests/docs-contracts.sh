@@ -46,6 +46,14 @@ for docs_contract_path in \
     }
 done
 
+[[ "$(grep -c '^# ' "$docs_contract_root/docs/framework-updates.md")" -eq 1 ]] || {
+    printf 'framework-updates.md must have exactly one H1.\n' >&2
+    exit 1
+}
+grep -Fq 'Scheduled runs cover both release rows' "$docs_contract_root/docs/framework-updates.md"
+grep -Fq 'leaving that input blank runs both rows' "$docs_contract_root/docs/framework-updates.md"
+grep -Fq 'v2.0.0 baseline and current supported v2.1.0' "$docs_contract_readme"
+
 for docs_contract_url in \
     'https://github.com/basefoundry/base-bash-libs' \
     'https://github.com/basefoundry/base-bash-libs/blob/main/docs/README.md' \

@@ -25,11 +25,20 @@ manifest verification through the candidate launcher and public library root.
 It does not modify `vendor/base-bash-libs` or `base-bash-libs.lock`.
 
 The `Framework Compatibility` workflow performs the same check on Ubuntu and
-macOS. Scheduled runs use `v2.0.0`; manual runs require an explicit release tag
-or 40-character commit and reject branch names. Release tags are resolved via
-their explicit `refs/tags/` namespace (including annotated-tag peeling), and
-the checkout always uses the resulting full commit. A version-shaped branch is
-never accepted as a candidate.
+macOS. Its matrix defaults to the immutable `v2.0.0` baseline and current
+supported `v2.1.0` release. Scheduled runs cover both release rows; a manual
+`framework_ref` tests only the explicit release tag or 40-character commit, and
+leaving that input blank runs both rows. Branch names are rejected. Release
+tags are resolved via their explicit `refs/tags/` namespace (including
+annotated-tag peeling), and the checkout always uses the resulting full commit.
+A version-shaped branch is never accepted as a candidate.
+
+### Canary checks
+
+The canary checks producer status independently of output, quiet stderr,
+configuration precedence, success/failure/TERM cleanup, and dry-run no-write
+behavior. Its temporary directory is removed on success and failure. Synthetic
+launchers returning 42 after valid output prove that the canary fails closed.
 
 ## Update the committed pin
 
@@ -57,15 +66,6 @@ Revert the complete dependency-update pull request so the vendor tree, lock,
 release evidence, and changelog move back together. Run the same local and
 hosted gates against the restored pin. Do not repair a failed update by copying
 individual library files from an older package.
-# Canary coverage
-
-Scheduled runs cover the immutable v2.0.0 baseline and current supported v2.1.0
-release on Ubuntu and macOS. A manual immutable reference tests that candidate;
-leaving it blank runs both release rows. This coverage does not change the
-committed v2.0.0 vendor pin. Advance the current-release row deliberately when a
-new supported release is adopted for compatibility testing.
-
-The canary checks producer status independently of output, quiet stderr,
-configuration precedence, success/failure/TERM cleanup, and dry-run no-write
-behavior. Its temporary directory is removed on success and failure. Synthetic
-launchers returning 42 after valid output prove that the canary fails closed.
+This compatibility coverage does not change the committed v2.0.0 vendor pin.
+Advance the current-release row deliberately when a new supported release is
+adopted for compatibility testing.
