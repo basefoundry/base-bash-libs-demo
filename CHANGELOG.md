@@ -7,10 +7,18 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [0.1.2] - 2026-10-08
+
 ### Documentation
 
 - Documented stable quick-start output, the informational collection log, and
   troubleshooting for Bash setup, output collisions, and modified bundles.
+- Added runnable before-and-after examples for command parsing and cleanup,
+  including executable documentation checks.
+- Moved the bundle format and filesystem trust boundary into its own indexed
+  documentation page.
 
 ## [0.1.1] - 2026-10-08
 
