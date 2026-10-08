@@ -35,6 +35,7 @@ required_files=(
     tests/framework-ref.bats
     tests/docs-examples.sh
     tests/docs-contracts.sh
+    tests/external-consumer-walkthrough.sh
     tests/minimal-consumer.sh
     tests/release-artifact.sh
     docs/five-minute-tutorial.md
@@ -76,7 +77,7 @@ while IFS= read -r requirement || [[ -n "$requirement" ]]; do
     fi
 done < "$artifact_requirements_input"
 
-for executable in bin/beacon examples/minimal-cli scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/minimal-consumer.sh tests/release-artifact.sh; do
+for executable in bin/beacon examples/minimal-cli scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/external-consumer-walkthrough.sh tests/minimal-consumer.sh tests/release-artifact.sh; do
     [[ -x "$executable" ]] || {
         printf 'Expected executable file: %s\n' "$executable" >&2
         exit 1
@@ -97,10 +98,11 @@ command -v shellcheck > /dev/null 2>&1 || {
     printf 'shellcheck is required.\n' >&2
     exit 1
 }
-shellcheck bin/beacon examples/minimal-cli lib/beacon.sh scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/minimal-consumer.sh tests/release-artifact.sh || exit $?
+shellcheck bin/beacon examples/minimal-cli lib/beacon.sh scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/external-consumer-walkthrough.sh tests/minimal-consumer.sh tests/release-artifact.sh || exit $?
 
 ./tests/docs-examples.sh || exit $?
 ./tests/docs-contracts.sh || exit $?
+./tests/external-consumer-walkthrough.sh || exit $?
 ./tests/minimal-consumer.sh || exit $?
 
 command -v bats > /dev/null 2>&1 || {
