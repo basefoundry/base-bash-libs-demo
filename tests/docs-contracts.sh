@@ -52,7 +52,7 @@ done
 }
 grep -Fq 'Scheduled runs cover both release rows' "$docs_contract_root/docs/framework-updates.md"
 grep -Fq 'leaving that input blank runs both rows' "$docs_contract_root/docs/framework-updates.md"
-grep -Fq 'v2.0.0 rollback baseline and current supported v2.2.0' "$docs_contract_readme"
+grep -Fq 'v2.0.0 rollback baseline and the committed v2.2.0' "$docs_contract_readme"
 grep -Fq "Beacon's README has no separate release" "$docs_contract_root/docs/release-process.md"
 grep -Fq '## [0.1.0] - YYYY-MM-DD' "$docs_contract_root/docs/release-process.md"
 grep -Fq 'Required consumer and artifact validation' "$docs_contract_root/docs/release-process.md"
@@ -64,16 +64,17 @@ grep -Fq 'Required consumer and artifact validation' "$docs_contract_root/CONTRI
 grep -Fq 'intentionally keeps an open pull request in' "$docs_contract_root/docs/project-workflow.md"
 grep -Fq "does not use \`In Review\`" "$docs_contract_root/docs/project-workflow.md"
 grep -Fq 'Hash-locked the SPDX artifact-test dependency' "$docs_contract_root/CHANGELOG.md"
-[[ "$(sed -n '/^### /p' "$docs_contract_root/CHANGELOG.md" | sed -n '1p')" == '### Added' ]]
-[[ "$(sed -n '/^### /p' "$docs_contract_root/CHANGELOG.md" | sed -n '2p')" == '### Changed' ]]
-[[ "$(sed -n '/^### /p' "$docs_contract_root/CHANGELOG.md" | sed -n '3p')" == '### Fixed' ]]
-[[ "$(sed -n '/^### /p' "$docs_contract_root/CHANGELOG.md" | sed -n '4p')" == '### Security' ]]
+docs_contract_release_sections="$(sed -n '/^## \[0.1.0\]/,$p' "$docs_contract_root/CHANGELOG.md")"
+[[ "$(printf '%s\n' "$docs_contract_release_sections" | sed -n '/^### /p' | sed -n '1p')" == '### Added' ]]
+[[ "$(printf '%s\n' "$docs_contract_release_sections" | sed -n '/^### /p' | sed -n '2p')" == '### Changed' ]]
+[[ "$(printf '%s\n' "$docs_contract_release_sections" | sed -n '/^### /p' | sed -n '3p')" == '### Fixed' ]]
+[[ "$(printf '%s\n' "$docs_contract_release_sections" | sed -n '/^### /p' | sed -n '4p')" == '### Security' ]]
 
 for docs_contract_url in \
     'https://github.com/basefoundry/base-bash-libs' \
-    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/README.md' \
-    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/v2/quickstart.md' \
-    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/api-reference.md'; do
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.1/docs/README.md' \
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.1/docs/v2/quickstart.md' \
+    'https://github.com/basefoundry/base-bash-libs/blob/v2.2.1/docs/api-reference.md'; do
     grep -Fq "$docs_contract_url" "$docs_contract_readme" || {
         printf 'README is missing upstream onboarding link: %s\n' "$docs_contract_url" >&2
         exit 1
@@ -84,7 +85,23 @@ if grep -R -n -E 'base-bash-libs/blob/main/docs/(api-reference|v2/quickstart|REA
     printf 'Pinned consumer docs must not link API material to upstream main.\n' >&2
     exit 1
 fi
-grep -Fq 'v2.2.0' "$docs_contract_root/docs/use-in-your-project.md"
+grep -Fq 'v2.2.1' "$docs_contract_root/docs/use-in-your-project.md"
+for docs_contract_text in \
+    'BEGIN EXTERNAL CONSUMER WALKTHROUGH' \
+    "base-bash-libs-v\$release_version.tar.gz" \
+    "base-bash-libs-v\$release_version.SHA256SUMS" \
+    "base-bash-libs-v\$release_version.provenance.json" \
+    "base-bash-libs-v\$release_version.spdx.json" \
+    "sha256sum -c \"\$checksum_name\"" \
+    "shasum -a 256 -c \"\$checksum_name\"" \
+    'base-bash-libs.lock' \
+    'consumer project' \
+    "rm -rf \"\$release_root\""; do
+    grep -Fq "$docs_contract_text" "$docs_contract_starter" || {
+        printf 'External-consumer walkthrough is missing: %s\n' "$docs_contract_text" >&2
+        exit 1
+    }
+done
 # Keep this issue reference aligned with the reviewed adoption change.
 grep -Fq 'issue #38' "$docs_contract_root/docs/use-in-your-project.md"
 

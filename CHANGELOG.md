@@ -7,7 +7,11 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Documentation
+
+- Added a verified external-consumer walkthrough for the current Base Bash
+  release, including checksum/evidence verification, lockfile identity, and
+  offline post-preparation execution.
 
 ## [0.1.0] - 2026-10-07
 

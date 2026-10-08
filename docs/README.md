@@ -31,5 +31,7 @@ Choose the shortest path that answers your current question.
 
 Maintainers preparing a release should also use the
 [release-notes template](release-notes-template.md). Beacon's committed package
-is v2.2.0, so its framework reference and quickstart material use the upstream
-[v2.2.0 documentation map](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/README.md).
+is v2.2.0, so its repository-specific framework reference remains pinned to
+that baseline. New projects should use the current upstream
+[v2.2.1 documentation map](https://github.com/basefoundry/base-bash-libs/blob/v2.2.1/docs/README.md)
+through [Use Base Bash in your project](use-in-your-project.md).

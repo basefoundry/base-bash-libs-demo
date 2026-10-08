@@ -10,14 +10,16 @@ rules, and user-facing messages.
 
 Beacon does not require Base, Docker, cloud credentials, or network access at
 runtime. The verified `base-bash-libs` v2.2.0 release bundle is committed under
-`vendor/base-bash-libs`, so a fresh clone has everything it needs.
+`vendor/base-bash-libs`, so a fresh clone has everything it needs. New external
+projects should follow the onboarding path for the current v2.2.1 release;
+Beacon's committed vendor is intentionally a separate reproducible baseline.
 
 ## Start here
 
 - [Base Bash overview](https://github.com/basefoundry/base-bash-libs)
-- [Versioned documentation map](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/README.md)
-- [Five-minute v2 quickstart](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/v2/quickstart.md)
-- [Generated public API reference](https://github.com/basefoundry/base-bash-libs/blob/v2.2.0/docs/api-reference.md)
+- [Versioned documentation map](https://github.com/basefoundry/base-bash-libs/blob/v2.2.1/docs/README.md)
+- [Five-minute v2 quickstart](https://github.com/basefoundry/base-bash-libs/blob/v2.2.1/docs/v2/quickstart.md)
+- [Generated public API reference](https://github.com/basefoundry/base-bash-libs/blob/v2.2.1/docs/api-reference.md)
 - [Beacon documentation and recommended reading path](docs/README.md)
 
 To move directly from evaluation to a small application, follow
@@ -158,7 +160,7 @@ maintainer action. See the [release process](docs/release-process.md).
 ## Framework compatibility
 
 The scheduled `Framework Compatibility` workflow tests both the immutable
-v2.0.0 rollback baseline and current supported v2.2.0 release on Ubuntu and macOS.
+v2.0.0 rollback baseline and the committed v2.2.0 release on Ubuntu and macOS.
 Manual dispatch can test one explicit Base Bash release tag or full commit
 without changing Beacon's committed default package. The same black-box
 contract is available locally:
@@ -176,7 +178,8 @@ the immutable-input rules, reviewed pin-update procedure, and rollback path.
 - `lib/beacon.sh` contains the consumer-owned CLI and application policy.
 - `fixtures/workspace` provides deterministic, intentionally fake inputs.
 - `examples/minimal-cli` is the tested smallest runnable CLI consumer.
-- `vendor/base-bash-libs` is the verified v2.2.0 release bundle.
+- `vendor/base-bash-libs` is the verified v2.2.0 release bundle used by the
+  committed Beacon baseline.
 - `tests/beacon.bats` exercises the installed application boundary.
 - `tests/lifecycle.bats` exercises failure, signals, cleanup, automation, and
   hostile synthetic fixture data.
