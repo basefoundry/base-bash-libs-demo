@@ -7,7 +7,10 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Documentation
+
+- Documented stable quick-start output, the informational collection log, and
+  troubleshooting for Bash setup, output collisions, and modified bundles.
 
 ## [0.1.1] - 2026-10-08
 
