@@ -70,6 +70,110 @@ directory before repeating the real collection, or select an unused destination:
 `collect --dry-run` creates neither the output directory nor temporary
 application state beneath it.
 
+### Expected output
+
+The paths, branch name, framework commit, and timestamps vary by checkout. The
+stable lines below are the useful contract to compare with a terminal session:
+
+`./bin/beacon --help` includes:
+
+```text
+Offline support-bundle collector
+Commands:
+  status                 Show fixture and framework readiness
+  plan                   Describe bundle inputs and redactions
+  collect                Create a redacted support bundle
+  verify                 Verify a collected support bundle
+```
+
+`./bin/beacon status` reports the consumer and the immutable framework identity:
+
+```text
+application=beacon
+workspace_ready=yes
+selected_files=3
+framework_version=<release version>
+framework_provenance=release-artifact
+```
+
+`./bin/beacon plan` reports the selected inputs and redaction policy without
+creating a bundle:
+
+```text
+operation=collect
+selected_files=3
+inputs=config/app.env,logs/app.log,system/info.txt
+redact_keys=TOKEN,SECRET,PASSWORD
+include=config/app.env
+include=logs/app.log
+include=system/info.txt
+```
+
+`./bin/beacon collect --dry-run` reports the planned operation and does not
+write the destination:
+
+```text
+dry_run=true
+operation=collect
+selected_files=3
+```
+
+Successful `./bin/beacon collect` reports the bundle and checksum manifest:
+
+```text
+bundle=<output path>
+manifest=<output path>/MANIFEST.sha256
+```
+
+Successful `./bin/beacon verify --output <output path>` reports:
+
+```text
+verified=true
+files=4
+bundle=<output path>
+```
+
+On a normal, non-quiet collection, the vendored `file` module may also emit an
+`INFO` line while it updates the bundle README section. That line includes a
+temporary path and a framework source location, so both are intentionally
+environment-specific; it is informational, not a failure. Use `--quiet` when
+only the stable machine-readable result is wanted.
+
+## Troubleshooting
+
+### The launcher cannot find a supported Bash
+
+Beacon requires Bash 4.2.53 or newer. On macOS, install the Homebrew Bash
+formula and ask Base to diagnose the project setup:
+
+```bash
+brew install bash
+base-bash check --project .
+```
+
+Run the check from this repository. It confirms the launcher and framework
+setup without changing Beacon's committed vendor.
+
+### Collection refuses to overwrite an output directory
+
+Collection never overwrites an existing destination. Choose a new path, or
+remove only a bundle that you own before retrying:
+
+```bash
+./bin/beacon collect --output /tmp/my-beacon-bundle-2
+```
+
+### Verification reports a checksum mismatch
+
+The bundle is immutable after collection. If a file under `files/` was edited,
+`verify` exits non-zero with `ERROR: Manifest checksum mismatch.` Collect again
+to a new destination rather than editing the existing bundle:
+
+```bash
+./bin/beacon collect --output /tmp/my-beacon-bundle-fixed
+./bin/beacon verify --output /tmp/my-beacon-bundle-fixed
+```
+
 For a scenario-driven walkthrough whose commands are exercised by CI, follow
 [Beacon in five minutes](docs/five-minute-tutorial.md).
 
@@ -147,9 +251,11 @@ Base Bash version. From a clean checkout whose `VERSION` matches the requested
 version, build and verify the deterministic four-file artifact set locally:
 
 ```bash
-./scripts/release-artifact build --version 0.1.0 --output /tmp/beacon-release
-./scripts/release-artifact verify /tmp/beacon-release
-./scripts/release-artifact verify /tmp/beacon-release --trusted-smoke
+release_version=X.Y.Z
+release_output=/tmp/beacon-release-$release_version
+./scripts/release-artifact build --version "$release_version" --output "$release_output"
+./scripts/release-artifact verify "$release_output"
+./scripts/release-artifact verify "$release_output" --trusted-smoke
 ```
 
 The output contains the standalone archive, SHA-256 manifest, SPDX SBOM, and
