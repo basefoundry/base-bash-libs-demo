@@ -19,6 +19,86 @@ Beacon is useful evidence because it consumes only the public API committed in
 | Repeat checked directory, file, and command handling | `base_std_safe_mkdir`, `base_std_safe_truncate`, and `base_std_run` provide consistent failure behavior | Bundle layout, manifest format, and domain-specific diagnostics |
 | Display the dependency that actually ran | `base_require_version` and the immutable `BASE_BASH_LIBS_VERSION`, `BASE_BASH_LIBS_COMMIT`, `BASE_BASH_LIBS_DIRTY_STATE`, and `BASE_BASH_LIBS_PROVENANCE` values expose package identity | Beacon's independent application version and release lifecycle |
 
+## Code-level before and after
+
+The following examples are illustrative, not Beacon's history. They show the
+kind of plumbing a small Bash application would otherwise have to maintain.
+The `before` version is intentionally short but runnable; the `after` version
+uses the same public contracts that Beacon exercises.
+
+<!-- BEGIN BEFORE AFTER CLI -->
+### Command parsing and dispatch
+
+Before, an application has to keep option parsing, usage text, validation, and
+dispatch consistent by hand:
+
+```bash
+set -eu
+
+usage() {
+    printf 'usage: %s [-o PATH] {status|collect}\n' "${0##*/}"
+}
+
+output=''
+while getopts ':o:h' option; do
+    case "$option" in
+        o) output="$OPTARG" ;;
+        h) usage; exit 0 ;;
+        :) printf 'missing value for -%s\n' "$OPTARG" >&2; usage >&2; exit 2 ;;
+        \?) printf 'unknown option: -%s\n' "$OPTARG" >&2; usage >&2; exit 2 ;;
+    esac
+done
+shift "$((OPTIND - 1))"
+
+case "${1-}" in
+    status) printf 'status=ready\n' ;;
+    collect) printf 'collecting=%s\n' "${output:-default}" ;;
+    *) usage >&2; exit 2 ;;
+esac
+```
+
+After, the CLI contract generates help, option validation, and dispatch from
+one declaration boundary:
+
+```bash
+base_cli_model_init beacon name=beacon version=0.1.0 \
+    description="Offline support-bundle collector" handler=beacon_dispatch
+base_cli_command beacon status "Show fixture and framework readiness" handler=beacon_dispatch
+base_cli_command beacon collect "Create a redacted support bundle" handler=beacon_dispatch
+base_cli_option beacon "" output value --output help="Support bundle directory" metavar=PATH
+```
+<!-- END BEFORE AFTER CLI -->
+
+<!-- BEGIN BEFORE AFTER CLEANUP -->
+### Temporary-directory cleanup
+
+Before, an application owns a trap and must preserve it when another cleanup
+path or signal handler is added later:
+
+```bash
+stage="$(mktemp -d)"
+cleanup_stage() {
+    rm -rf -- "$stage"
+}
+trap cleanup_stage EXIT
+printf 'staging=%s\n' "$stage"
+```
+
+After, Base Bash composes cleanup ownership and lets the application transfer a
+published path explicitly:
+
+```bash
+base_std_make_temp_dir stage beacon-demo
+printf 'staging=%s\n' "$stage"
+base_std_unregister_cleanup_path "$stage"
+```
+
+The lifecycle contract is executable evidence, not just prose:
+`bats --filter 'cleanup evidence failure' tests/lifecycle.bats` demonstrates
+that a cleanup-log failure does not replace the application's successful exit
+status.
+<!-- END BEFORE AFTER CLEANUP -->
+
 For example, `beacon_collect` asks `base_std_make_temp_dir` for a staging
 directory. The framework registers that path with its composed cleanup
 lifecycle. Beacon can return from any later failure without adding a second
