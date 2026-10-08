@@ -31,4 +31,6 @@ shellcheck --shell=bash "$example_script"
     /usr/bin/env bash "$example_script"
 )
 
+/usr/bin/env bash "$docs_root/tests/docs-before-after.sh"
+
 printf 'Runnable documentation examples passed.\n'

@@ -98,7 +98,7 @@ command -v shellcheck > /dev/null 2>&1 || {
     printf 'shellcheck is required.\n' >&2
     exit 1
 }
-shellcheck bin/beacon examples/minimal-cli lib/beacon.sh scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-contracts.sh tests/external-consumer-walkthrough.sh tests/minimal-consumer.sh tests/release-artifact.sh || exit $?
+shellcheck bin/beacon examples/minimal-cli lib/beacon.sh scripts/release-artifact scripts/verify-vendor scripts/resolve-framework-ref tests/validate.sh tests/bash-42-smoke.sh tests/candidate-smoke.sh tests/docs-examples.sh tests/docs-before-after.sh tests/docs-contracts.sh tests/external-consumer-walkthrough.sh tests/minimal-consumer.sh tests/release-artifact.sh || exit $?
 
 ./tests/docs-examples.sh || exit $?
 ./tests/docs-contracts.sh || exit $?
