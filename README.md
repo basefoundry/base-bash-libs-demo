@@ -93,6 +93,9 @@ non-interactive examples, see
   with the Base Bash lifecycle.
 - `collect --scenario failure|interrupt` and `--lifecycle-log` provide safe,
   machine-readable evidence for failure and cleanup demonstrations.
+- The [bundle format and trust boundary](docs/bundle-format-and-trust-boundary.md)
+  explains schema 1, configuration precedence, destination ownership, and the
+  filesystem rules that collection and verification enforce.
 
 ## Framework boundary
 

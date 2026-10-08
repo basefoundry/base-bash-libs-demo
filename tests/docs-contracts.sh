@@ -37,11 +37,30 @@ for docs_contract_path in \
     use-in-your-project.md \
     five-minute-tutorial.md \
     lifecycle-and-automation.md \
+    bundle-format-and-trust-boundary.md \
     framework-updates.md \
     release-process.md \
     ci-required-checks.md; do
     grep -Fq "($docs_contract_path)" "$docs_contract_index" || {
         printf 'Documentation index is missing %s.\n' "$docs_contract_path" >&2
+        exit 1
+    }
+done
+
+for docs_contract_page in "$docs_contract_root"/docs/*.md; do
+    docs_contract_name="$(basename "$docs_contract_page")"
+    [[ "$docs_contract_name" == README.md ]] && continue
+    docs_contract_h1_count="$(awk '
+        /^```/ { in_code = !in_code; next }
+        !in_code && /^# / { count += 1 }
+        END { print count + 0 }
+    ' "$docs_contract_page")"
+    [[ "$docs_contract_h1_count" -eq 1 ]] || {
+        printf '%s must have exactly one H1.\n' "$docs_contract_name" >&2
+        exit 1
+    }
+    grep -Fq "($docs_contract_name)" "$docs_contract_index" || {
+        printf 'Documentation index is missing %s.\n' "$docs_contract_name" >&2
         exit 1
     }
 done
@@ -53,6 +72,10 @@ done
 grep -Fq 'Scheduled runs cover both release rows' "$docs_contract_root/docs/framework-updates.md"
 grep -Fq 'leaving that input blank runs both rows' "$docs_contract_root/docs/framework-updates.md"
 grep -Fq 'v2.0.0 rollback baseline and the committed v2.2.0' "$docs_contract_readme"
+grep -Fq '[bundle format and trust boundary](docs/bundle-format-and-trust-boundary.md)' "$docs_contract_readme"
+grep -Fq 'Bundle schema 1' "$docs_contract_root/docs/bundle-format-and-trust-boundary.md"
+grep -Fq 'Configuration precedence' "$docs_contract_root/docs/bundle-format-and-trust-boundary.md"
+grep -Fq 'owned reservation' "$docs_contract_root/docs/bundle-format-and-trust-boundary.md"
 grep -Fq "Beacon's README has no separate release" "$docs_contract_root/docs/release-process.md"
 grep -Fq '## [0.1.0] - YYYY-MM-DD' "$docs_contract_root/docs/release-process.md"
 grep -Fq 'Required consumer and artifact validation' "$docs_contract_root/docs/release-process.md"

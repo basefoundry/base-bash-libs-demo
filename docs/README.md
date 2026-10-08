@@ -20,13 +20,15 @@ Choose the shortest path that answers your current question.
 
 5. [Lifecycle and automation](lifecycle-and-automation.md) demonstrates normal,
    failure, interruption, cleanup, non-interactive, and redaction contracts.
-6. [Framework updates](framework-updates.md) defines candidate testing, atomic
+6. [Bundle format and trust boundary](bundle-format-and-trust-boundary.md)
+   documents schema 1, configuration precedence, and filesystem safety rules.
+7. [Framework updates](framework-updates.md) defines candidate testing, atomic
    pin changes, evidence, and rollback.
-7. [Release process](release-process.md) defines reproducible Beacon artifacts
+8. [Release process](release-process.md) defines reproducible Beacon artifacts
    and the separately authorized publication sequence.
-8. [Project workflow](project-workflow.md) explains issue status and pull-request
+9. [Project workflow](project-workflow.md) explains issue status and pull-request
    linkage for ordinary and stacked PRs.
-9. [Required CI checks](ci-required-checks.md) defines the aggregate validation
+10. [Required CI checks](ci-required-checks.md) defines the aggregate validation
    contract used before merging changes to `main`.
 
 Maintainers preparing a release should also use the
