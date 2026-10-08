@@ -7,6 +7,10 @@ and versions are tracked in the repo-root `VERSION` file.
 
 ## [Unreleased]
 
+No unreleased changes yet.
+
+## [0.1.1] - 2026-10-08
+
 ### Documentation
 
 - Added a verified external-consumer walkthrough for the current Base Bash
