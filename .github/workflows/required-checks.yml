@@ -62,7 +62,7 @@ jobs:
             exit 1
           fi
 
-          expected_names_json='["Ubuntu validation","Minimum runtime (Bash 4.2.53)","macOS Homebrew Bash validation","Standalone artifact (ubuntu-24.04)","Standalone artifact (macos-14)"]'
+          expected_names_json='["Ubuntu validation","Minimum runtime (Bash 4.2.53)","macOS Homebrew Bash validation","Standalone artifact (ubuntu-24.04)","Standalone artifact (macos-15)"]'
           for attempt in {1..30}; do
             workflow_runs_json="$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?head_sha=$live_head_sha&event=pull_request&per_page=20")"

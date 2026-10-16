@@ -12,7 +12,7 @@ The aggregate depends on these validation lanes:
 - `Minimum runtime (Bash 4.2.53)`
 - `macOS Homebrew Bash validation`
 - both matrix legs of `Standalone artifact (ubuntu-24.04)` and
-  `Standalone artifact (macos-14)`
+  `Standalone artifact (macos-15)`
 
 The aggregate waits for every named lane and fails closed unless every
 dependency reports `success`, so a missing, partial, cancelled, or incomplete
