@@ -62,7 +62,8 @@ jobs:
             exit 1
           fi
 
-          expected_names_json='["Ubuntu validation","Minimum runtime (Bash 4.2.53)","macOS Homebrew Bash validation","Standalone artifact (ubuntu-24.04)","Standalone artifact (macos-14)"]'
+          expected_names_json='["Ubuntu validation","Minimum runtime (Bash 4.2.53)","macOS Homebrew Bash validation","Standalone artifact (ubuntu-24.04)"]'
+          macos_artifact_names_json='["Standalone artifact (macos-14)","Standalone artifact (macos-15)"]'
           for attempt in {1..30}; do
             workflow_runs_json="$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?head_sha=$live_head_sha&event=pull_request&per_page=20")"
@@ -74,12 +75,25 @@ jobs:
             fi
 
             jobs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
-            lane_summary="$(jq -c --argjson expected "$expected_names_json" '
+            lane_summary="$(jq -c \
+              --argjson expected "$expected_names_json" \
+              --argjson macos_artifact_names "$macos_artifact_names_json" '
               [
                 $expected[] as $name |
                 ([.jobs[] | select(.name == $name)] | sort_by(.id) | last) as $job |
                 {
                   name: $name,
+                  status: ($job.status // "missing"),
+                  conclusion: ($job.conclusion // "pending"),
+                  url: ($job.html_url // "")
+                }
+              ] + [
+                ([.jobs[] |
+                  . as $job |
+                  select(($macos_artifact_names | index($job.name)) != null)] |
+                  sort_by(.id) | last) as $job |
+                {
+                  name: ($job.name // "Standalone artifact (macos-14 or macos-15)"),
                   status: ($job.status // "missing"),
                   conclusion: ($job.conclusion // "pending"),
                   url: ($job.html_url // "")
