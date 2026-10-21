@@ -70,3 +70,17 @@ Before merging release-preparation work, confirm the exact
 intended repository gate for the pull request; [issue #37](https://github.com/basefoundry/base-bash-libs-demo/issues/37)
 tracks enabling it as an enforced required ruleset check after the exact
 context is configured and read back.
+
+## AI Context Maintenance
+
+Start AI-assisted orientation with [.ai-context/INDEX.md](.ai-context/INDEX.md).
+Maintain these curated summaries alongside meaningful changes to product scope,
+architecture, commands, or contributor workflows. Canonical docs and code remain
+the source of truth; update the pack when they disagree. State context impact in
+the PR, including a reason when no update is needed. Typo-only and internal changes
+without behavioral or architectural impact usually need no context update.
+
+Validate changes with `basectl export-context --list-files` and
+`basectl export-context --print` from the checkout, plus `git diff --check`.
+Keep the pack self-contained enough for offline reading, free of secrets and
+private runtime data, and independent of generated timestamps or export bundles.
